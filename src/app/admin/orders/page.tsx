@@ -3,10 +3,10 @@ import Link from "next/link"
 import { logoutAdminAction } from "@/app/admin/_actions/auth"
 import { requireAdminSessionOrRedirect } from "@/lib/mystoreqr/admin-auth"
 import { getAdminOrdersByStoreId, getAdminStores } from "@/lib/mystoreqr/admin-queries"
-import { ORDER_STATUS_OPTIONS, PAYMENT_STATUS_OPTIONS } from "@/lib/mystoreqr/constants"
 import { formatKrw, formatPhone } from "@/lib/mystoreqr/format"
 import { orderStatusLabel, paymentStatusLabel, priceStatusLabel } from "@/lib/mystoreqr/status"
 
+import { OrderTools } from "./order-tools"
 import { setOrderQuoteAction, setOrderStatusAction, setPaymentStatusAction } from "./actions"
 
 const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
@@ -161,6 +161,31 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
           const hasUnknownLine = order.order_items.some((item) => item.unit_price == null)
           const defaultSubtotal = order.subtotal_amount ?? knownLineTotal
           const defaultDeliveryFee = order.delivery_fee ?? selectedStore.delivery_fee
+          const orderSummaryText = [
+            `주문번호: ${order.order_code}`,
+            `고객: ${order.customer_name} / ${formatPhone(order.customer_phone)}`,
+            `수령: ${order.fulfillment_type === "delivery" ? "배달" : "픽업"}`,
+            order.delivery_address
+              ? `주소: ${order.delivery_address}${order.delivery_address_detail ? ` ${order.delivery_address_detail}` : ""}`
+              : null,
+            `주문상태: ${orderStatusLabel(order.status)}`,
+            `가격상태: ${priceStatusLabel(order.price_status)}`,
+            `결제상태: ${paymentStatusLabel(order.payment_status)}`,
+            "",
+            "상품:",
+            ...order.order_items.map(
+              (item) =>
+                `- ${item.product_name} ${item.quantity}개 / 단가 ${formatKrw(item.unit_price)} / 합계 ${formatKrw(item.line_total)}`
+            ),
+            "",
+            `상품 합계: ${formatKrw(order.subtotal_amount)}`,
+            `배달비: ${formatKrw(order.delivery_fee)}`,
+            `총액: ${formatKrw(order.total_amount)}`,
+            order.price_note ? `가격 메모: ${order.price_note}` : null,
+            order.customer_note ? `요청사항: ${order.customer_note}` : null,
+          ]
+            .filter(Boolean)
+            .join("\n")
 
           return (
             <article key={order.id} className="mq-card p-4">
@@ -180,6 +205,9 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                     결제 {paymentStatusLabel(order.payment_status)}
                   </span>
                 </div>
+              </div>
+              <div className="mt-2">
+                <OrderTools orderCode={order.order_code} summaryText={orderSummaryText} />
               </div>
 
               <div className="mt-3 grid gap-1 text-sm text-zinc-700">
@@ -272,61 +300,64 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                 <form action={setOrderStatusAction} className="rounded-xl border border-brand-border p-3">
                   <input type="hidden" name="orderId" value={order.id} />
                   <input type="hidden" name="storeSlug" value={selectedStore.slug} />
-                  <p className="text-sm font-semibold text-zinc-900">주문 상태 변경</p>
+                  <p className="text-sm font-semibold text-zinc-900">주문 상태 빠른 변경</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {[
+                      { key: "preparing", label: "준비중" },
+                      { key: "delivering", label: "배달중" },
+                      { key: "completed", label: "완료" },
+                    ].map((option) => (
+                      <button
+                        key={option.key}
+                        type="submit"
+                        name="status"
+                        value={option.key}
+                        className="rounded-md bg-brand-soft px-3 py-1.5 text-xs font-medium text-brand-strong hover:bg-brand-border"
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
                   <label className="mt-2 grid gap-1 text-xs text-zinc-600">
-                    상태
-                    <select
-                      name="status"
-                      defaultValue={order.status}
-                      className="h-9 rounded-md border border-zinc-300 px-2 text-sm focus:border-brand focus:outline-none"
-                    >
-                      {ORDER_STATUS_OPTIONS.map((status) => (
-                        <option key={status} value={status}>
-                          {orderStatusLabel(status)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="mt-2 grid gap-1 text-xs text-zinc-600">
-                    취소 사유(선택)
+                    취소 사유
                     <input
                       name="statusNote"
                       defaultValue={order.cancel_reason ?? ""}
                       className="h-9 rounded-md border border-zinc-300 px-2 text-sm focus:border-brand focus:outline-none"
+                      placeholder="취소할 때만 입력"
                     />
                   </label>
                   <button
                     type="submit"
-                    className="mq-btn-primary mt-3 h-9 w-full rounded-md"
+                    name="status"
+                    value="canceled"
+                    className="mt-3 h-9 w-full rounded-md bg-rose-600 text-sm font-semibold text-white hover:bg-rose-700"
                   >
-                    상태 저장
+                    주문 취소
                   </button>
                 </form>
 
                 <form action={setPaymentStatusAction} className="rounded-xl border border-brand-border p-3">
                   <input type="hidden" name="orderId" value={order.id} />
                   <input type="hidden" name="storeSlug" value={selectedStore.slug} />
-                  <p className="text-sm font-semibold text-zinc-900">결제 상태 변경</p>
-                  <label className="mt-2 grid gap-1 text-xs text-zinc-600">
-                    결제 상태
-                    <select
-                      name="paymentStatus"
-                      defaultValue={order.payment_status}
-                      className="h-9 rounded-md border border-zinc-300 px-2 text-sm focus:border-brand focus:outline-none"
-                    >
-                      {PAYMENT_STATUS_OPTIONS.map((status) => (
-                        <option key={status} value={status}>
-                          {paymentStatusLabel(status)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button
-                    type="submit"
-                    className="mq-btn-primary mt-3 h-9 w-full rounded-md"
-                  >
-                    결제 상태 저장
-                  </button>
+                  <p className="text-sm font-semibold text-zinc-900">결제 상태 빠른 변경</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {[
+                      { key: "waiting_transfer", label: "입금대기" },
+                      { key: "confirmed", label: "입금확인" },
+                      { key: "rejected", label: "반려" },
+                    ].map((option) => (
+                      <button
+                        key={option.key}
+                        type="submit"
+                        name="paymentStatus"
+                        value={option.key}
+                        className="rounded-md bg-brand-soft px-3 py-1.5 text-xs font-medium text-brand-strong hover:bg-brand-border"
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
                 </form>
               </div>
 

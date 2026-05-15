@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
+import { writeAdminActionLog } from "@/lib/mystoreqr/admin-action-logs"
 import { requireAdminSessionOrRedirect } from "@/lib/mystoreqr/admin-auth"
 import { ORDER_STATUS_OPTIONS, PAYMENT_STATUS_OPTIONS } from "@/lib/mystoreqr/constants"
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -98,6 +99,19 @@ export async function setOrderQuoteAction(formData: FormData) {
     redirectWithError(storeSlug, "가격 확정 가능한 주문이 아닙니다. (pending 상태만 가능)")
   }
 
+  await writeAdminActionLog({
+    storeSlug,
+    orderId,
+    actionType: "quote_set",
+    summary: `가격 확정: 상품합계 ${subtotalAmount}, 배달비 ${deliveryFee}`,
+    payload: {
+      subtotalAmount,
+      deliveryFee,
+      totalAmount,
+      priceNote: priceNote || null,
+    },
+  })
+
   revalidatePath("/admin/orders")
   redirectWithSuccess(storeSlug, "가격 확정을 완료했습니다.")
 }
@@ -128,6 +142,17 @@ export async function setOrderStatusAction(formData: FormData) {
   if (error) {
     redirectWithError(storeSlug, `주문 상태 변경 실패: ${error.message}`)
   }
+
+  await writeAdminActionLog({
+    storeSlug,
+    orderId,
+    actionType: "order_status_set",
+    summary: `주문 상태 변경: ${nextStatus}`,
+    payload: {
+      status: nextStatus,
+      statusNote: statusNote || null,
+    },
+  })
 
   revalidatePath("/admin/orders")
   redirectWithSuccess(storeSlug, "주문 상태를 변경했습니다.")
@@ -165,6 +190,16 @@ export async function setPaymentStatusAction(formData: FormData) {
   if (error) {
     redirectWithError(storeSlug, `결제 상태 변경 실패: ${error.message}`)
   }
+
+  await writeAdminActionLog({
+    storeSlug,
+    orderId,
+    actionType: "payment_status_set",
+    summary: `결제 상태 변경: ${paymentStatus}`,
+    payload: {
+      paymentStatus,
+    },
+  })
 
   revalidatePath("/admin/orders")
   redirectWithSuccess(storeSlug, "결제 상태를 변경했습니다.")
