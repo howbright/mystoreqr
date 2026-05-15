@@ -27,9 +27,9 @@
 
 ### 3) 관리자 주문 보드
 
-- `GET /admin/orders` (Supabase Auth 로그인 + store_admins 매핑 필요)
+- `GET /admin/orders` (MVP 임시: 로그인 없이 서버 관리자 키 기반 처리)
 - 매장별 주문 목록 조회
-- `quote_order_price` RPC로 가격 확정
+- 주문 가격 확정(서버 액션에서 직접 update)
 - 주문 상태 변경 (`orders.status`)
 - 결제 상태 변경 (`orders.payment_status`)
 
@@ -54,8 +54,11 @@ pnpm dev
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<publishable-key>
+SUPABASE_SERVICE_ROLE_KEY=<service-role-or-secret-key>
 # Optional legacy fallback:
 # NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
+# Optional modern key name fallback:
+# SUPABASE_SECRET_KEY=<secret-key>
 ```
 
 ## Supabase DB/타입 동기화

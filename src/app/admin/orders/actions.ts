@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
 import { ORDER_STATUS_OPTIONS, PAYMENT_STATUS_OPTIONS } from "@/lib/mystoreqr/constants"
-import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import type { Database } from "@/types/database.type"
 
 type OrderStatus = Database["public"]["Enums"]["order_status"]
@@ -44,15 +44,13 @@ function redirectWithSuccess(storeSlug: string, message: string): never {
   redirect(buildRedirectPath(storeSlug, "ok", message))
 }
 
-async function getAuthenticatedUser() {
-  const supabase = await createClient()
-  const { data, error } = await supabase.auth.getUser()
-
-  if (error || !data.user) {
-    return null
+function getAdminClientOrRedirect(storeSlug: string) {
+  try {
+    return createAdminClient()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "관리자 서버 클라이언트 생성 실패"
+    redirectWithError(storeSlug, message)
   }
-
-  return data.user
 }
 
 export async function setOrderQuoteAction(formData: FormData) {
@@ -70,21 +68,31 @@ export async function setOrderQuoteAction(formData: FormData) {
     redirectWithError(storeSlug, "금액은 0 이상의 정수로 입력해 주세요.")
   }
 
-  const user = await getAuthenticatedUser()
-  if (!user) {
-    redirectWithError(storeSlug, "관리자 로그인이 필요합니다.")
-  }
+  const supabase = getAdminClientOrRedirect(storeSlug)
+  const totalAmount = subtotalAmount + deliveryFee
 
-  const supabase = await createClient()
-  const { error } = await supabase.rpc("quote_order_price", {
-    p_order_id: orderId,
-    p_subtotal_amount: subtotalAmount,
-    p_delivery_fee: deliveryFee,
-    p_price_note: priceNote || undefined,
-  })
+  const { data, error } = await supabase
+    .from("orders")
+    .update({
+      subtotal_amount: subtotalAmount,
+      delivery_fee: deliveryFee,
+      total_amount: totalAmount,
+      price_status: "quoted",
+      price_note: priceNote || null,
+      quoted_at: new Date().toISOString(),
+      quoted_by: null,
+      payment_status: "waiting_transfer",
+    })
+    .eq("id", orderId)
+    .eq("status", "pending")
+    .select("id")
 
   if (error) {
     redirectWithError(storeSlug, `가격 확정 실패: ${error.message}`)
+  }
+
+  if (!data || data.length === 0) {
+    redirectWithError(storeSlug, "가격 확정 가능한 주문이 아닙니다. (pending 상태만 가능)")
   }
 
   revalidatePath("/admin/orders")
@@ -105,12 +113,7 @@ export async function setOrderStatusAction(formData: FormData) {
     redirectWithError(storeSlug, "변경할 주문 상태 값이 올바르지 않습니다.")
   }
 
-  const user = await getAuthenticatedUser()
-  if (!user) {
-    redirectWithError(storeSlug, "관리자 로그인이 필요합니다.")
-  }
-
-  const supabase = await createClient()
+  const supabase = getAdminClientOrRedirect(storeSlug)
   const updatePayload: Database["public"]["Tables"]["orders"]["Update"] = {
     status: nextStatus,
     cancel_reason: nextStatus === "canceled" ? statusNote || "관리자 취소" : null,
@@ -138,19 +141,14 @@ export async function setPaymentStatusAction(formData: FormData) {
     redirectWithError(storeSlug, "결제 상태 값이 올바르지 않습니다.")
   }
 
-  const user = await getAuthenticatedUser()
-  if (!user) {
-    redirectWithError(storeSlug, "관리자 로그인이 필요합니다.")
-  }
-
-  const supabase = await createClient()
+  const supabase = getAdminClientOrRedirect(storeSlug)
   const updatePayload: Database["public"]["Tables"]["orders"]["Update"] = {
     payment_status: paymentStatus,
   }
 
   if (paymentStatus === "confirmed") {
     updatePayload.confirmed_at = new Date().toISOString()
-    updatePayload.confirmed_by = user.id
+    updatePayload.confirmed_by = null
   } else {
     updatePayload.confirmed_at = null
     updatePayload.confirmed_by = null
