@@ -1,0 +1,13 @@
+-- OPTIONAL SQL (manual run only)
+-- MyStoreQR - quote-first order flow for single-store MVP
+--
+-- Use this order in Supabase SQL Editor:
+-- 1) Run: supabase/snippets/quote_first_order_flow_step1_enums.sql
+-- 2) After success, run: supabase/snippets/quote_first_order_flow_step2_apply.sql
+-- 3) After success, run: supabase/snippets/quote_first_order_flow_step3_functions.sql
+--
+-- Why split?
+-- - PostgreSQL enum values added with ALTER TYPE must be committed
+--   before they can be referenced in defaults/policies/updates.
+--
+-- This file is only a guide. Execute step1 + step2 files directly.

@@ -6,9 +6,17 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "supabase:login": "pnpm supabase login",
+    "supabase:link": "pnpm supabase link --project-ref \"$SUPABASE_PROJECT_REF\"",
+    "db:pull": "pnpm supabase db pull --linked",
+    "db:types": "mkdir -p src/types && pnpm supabase gen types typescript --linked --schema public > src/types/database.type.ts",
+    "db:types:project": "mkdir -p src/types && pnpm supabase gen types typescript --project-id \"$SUPABASE_PROJECT_REF\" --schema public > src/types/database.type.ts",
+    "db:sync": "pnpm db:pull && pnpm db:types"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.10.3",
+    "@supabase/supabase-js": "^2.105.4",
     "next": "16.2.6",
     "react": "19.2.4",
     "react-dom": "19.2.4"
@@ -20,6 +28,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
+    "supabase": "^2.98.2",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
