@@ -36,12 +36,12 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
     return (
       <main className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-8 md:px-6">
         <h1 className="text-2xl font-bold text-zinc-900">관리자 주문 보드</h1>
-        <section className="rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-700 shadow-sm">
+        <section className="mq-card p-5 text-sm text-zinc-700">
           <p>조회 가능한 매장이 없습니다.</p>
           <p className="mt-2">
-            1) Supabase Auth 로그인
+            1) `stores` 테이블에 활성 매장을 추가
             <br />
-            2) `store_admins` 테이블에 현재 사용자(`auth.uid`)를 매장 admin으로 연결
+            2) 해당 매장에 주문이 생성되면 이 화면에 표시됩니다.
           </p>
         </section>
       </main>
@@ -56,8 +56,8 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-6 md:px-8">
-      <header className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-        <p className="text-sm font-medium text-zinc-500">MyStoreQR Admin</p>
+      <header className="mq-card p-5">
+        <p className="text-sm font-medium text-brand-strong">MyStoreQR Admin</p>
         <h1 className="mt-1 text-2xl font-bold text-zinc-900">주문 보드</h1>
         <p className="mt-2 text-sm text-zinc-600">
           매장: {selectedStore.name}
@@ -72,8 +72,8 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
             href={`/admin/orders?store=${encodeURIComponent(store.slug)}`}
             className={`rounded-full px-4 py-2 text-sm ${
               store.id === selectedStore.id
-                ? "bg-zinc-900 text-white"
-                : "bg-zinc-100 text-zinc-700"
+                ? "bg-brand text-white"
+                : "bg-zinc-100 text-zinc-700 hover:bg-brand-soft"
             }`}
           >
             {store.name}
@@ -89,17 +89,17 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
       ) : null}
 
       <section className="grid gap-3 md:grid-cols-3">
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <div className="mq-card rounded-xl p-4">
           <p className="text-xs text-zinc-500">전체 주문</p>
           <p className="mt-1 text-2xl font-bold text-zinc-900">{orders.length}</p>
         </div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <div className="mq-card rounded-xl p-4">
           <p className="text-xs text-zinc-500">가격 확정 대기</p>
           <p className="mt-1 text-2xl font-bold text-zinc-900">
             {orders.filter((order) => order.price_status === "needs_review").length}
           </p>
         </div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+        <div className="mq-card rounded-xl p-4">
           <p className="text-xs text-zinc-500">입금 확인 필요</p>
           <p className="mt-1 text-2xl font-bold text-zinc-900">
             {
@@ -119,20 +119,20 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
           const defaultDeliveryFee = order.delivery_fee ?? selectedStore.delivery_fee
 
           return (
-            <article key={order.id} className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <article key={order.id} className="mq-card p-4">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="text-sm font-semibold text-zinc-900">#{order.order_code}</p>
                   <p className="text-xs text-zinc-500">접수: {formatDate(order.created_at)}</p>
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
-                  <span className="rounded-full bg-zinc-100 px-2 py-1 text-zinc-700">
+                  <span className="rounded-full bg-brand-soft px-2 py-1 text-brand-strong">
                     주문 {orderStatusLabel(order.status)}
                   </span>
-                  <span className="rounded-full bg-zinc-100 px-2 py-1 text-zinc-700">
+                  <span className="rounded-full bg-brand-soft px-2 py-1 text-brand-strong">
                     가격 {priceStatusLabel(order.price_status)}
                   </span>
-                  <span className="rounded-full bg-zinc-100 px-2 py-1 text-zinc-700">
+                  <span className="rounded-full bg-brand-soft px-2 py-1 text-brand-strong">
                     결제 {paymentStatusLabel(order.payment_status)}
                   </span>
                 </div>
@@ -185,7 +185,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
               </div>
 
               <div className="mt-4 grid gap-3 lg:grid-cols-3">
-                <form action={setOrderQuoteAction} className="rounded-xl border border-zinc-200 p-3">
+                <form action={setOrderQuoteAction} className="rounded-xl border border-brand-border p-3">
                   <input type="hidden" name="orderId" value={order.id} />
                   <input type="hidden" name="storeSlug" value={selectedStore.slug} />
                   <p className="text-sm font-semibold text-zinc-900">가격 확정</p>
@@ -196,7 +196,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                       type="number"
                       min={0}
                       defaultValue={defaultSubtotal}
-                      className="h-9 rounded-md border border-zinc-300 px-2 text-sm"
+                      className="h-9 rounded-md border border-zinc-300 px-2 text-sm focus:border-brand focus:outline-none"
                     />
                   </label>
                   <label className="mt-2 grid gap-1 text-xs text-zinc-600">
@@ -206,7 +206,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                       type="number"
                       min={0}
                       defaultValue={defaultDeliveryFee}
-                      className="h-9 rounded-md border border-zinc-300 px-2 text-sm"
+                      className="h-9 rounded-md border border-zinc-300 px-2 text-sm focus:border-brand focus:outline-none"
                     />
                   </label>
                   <label className="mt-2 grid gap-1 text-xs text-zinc-600">
@@ -214,18 +214,18 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                     <textarea
                       name="priceNote"
                       defaultValue={order.price_note ?? ""}
-                      className="min-h-16 rounded-md border border-zinc-300 px-2 py-1 text-sm"
+                      className="min-h-16 rounded-md border border-zinc-300 px-2 py-1 text-sm focus:border-brand focus:outline-none"
                     />
                   </label>
                   <button
                     type="submit"
-                    className="mt-3 h-9 w-full rounded-md bg-zinc-900 text-sm font-semibold text-white"
+                    className="mq-btn-primary mt-3 h-9 w-full rounded-md"
                   >
                     가격 확정 저장
                   </button>
                 </form>
 
-                <form action={setOrderStatusAction} className="rounded-xl border border-zinc-200 p-3">
+                <form action={setOrderStatusAction} className="rounded-xl border border-brand-border p-3">
                   <input type="hidden" name="orderId" value={order.id} />
                   <input type="hidden" name="storeSlug" value={selectedStore.slug} />
                   <p className="text-sm font-semibold text-zinc-900">주문 상태 변경</p>
@@ -234,7 +234,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                     <select
                       name="status"
                       defaultValue={order.status}
-                      className="h-9 rounded-md border border-zinc-300 px-2 text-sm"
+                      className="h-9 rounded-md border border-zinc-300 px-2 text-sm focus:border-brand focus:outline-none"
                     >
                       {ORDER_STATUS_OPTIONS.map((status) => (
                         <option key={status} value={status}>
@@ -248,18 +248,18 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                     <input
                       name="statusNote"
                       defaultValue={order.cancel_reason ?? ""}
-                      className="h-9 rounded-md border border-zinc-300 px-2 text-sm"
+                      className="h-9 rounded-md border border-zinc-300 px-2 text-sm focus:border-brand focus:outline-none"
                     />
                   </label>
                   <button
                     type="submit"
-                    className="mt-3 h-9 w-full rounded-md bg-zinc-900 text-sm font-semibold text-white"
+                    className="mq-btn-primary mt-3 h-9 w-full rounded-md"
                   >
                     상태 저장
                   </button>
                 </form>
 
-                <form action={setPaymentStatusAction} className="rounded-xl border border-zinc-200 p-3">
+                <form action={setPaymentStatusAction} className="rounded-xl border border-brand-border p-3">
                   <input type="hidden" name="orderId" value={order.id} />
                   <input type="hidden" name="storeSlug" value={selectedStore.slug} />
                   <p className="text-sm font-semibold text-zinc-900">결제 상태 변경</p>
@@ -268,7 +268,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                     <select
                       name="paymentStatus"
                       defaultValue={order.payment_status}
-                      className="h-9 rounded-md border border-zinc-300 px-2 text-sm"
+                      className="h-9 rounded-md border border-zinc-300 px-2 text-sm focus:border-brand focus:outline-none"
                     >
                       {PAYMENT_STATUS_OPTIONS.map((status) => (
                         <option key={status} value={status}>
@@ -279,7 +279,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                   </label>
                   <button
                     type="submit"
-                    className="mt-3 h-9 w-full rounded-md bg-zinc-900 text-sm font-semibold text-white"
+                    className="mq-btn-primary mt-3 h-9 w-full rounded-md"
                   >
                     결제 상태 저장
                   </button>

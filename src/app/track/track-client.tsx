@@ -93,22 +93,22 @@ export function TrackClient({
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-6 md:px-6">
-      <header className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-        <p className="text-sm font-medium text-zinc-500">MyStoreQR</p>
+      <header className="mq-card p-5">
+        <p className="text-sm font-medium text-brand-strong">MyStoreQR</p>
         <h1 className="mt-1 text-2xl font-bold text-zinc-900">주문 추적</h1>
         <p className="mt-2 text-sm text-zinc-600">
           주문 접수 후 받은 토큰과 연락처를 입력하면 현재 상태를 확인할 수 있습니다.
         </p>
       </header>
 
-      <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+      <section className="mq-card p-5">
         <div className="grid gap-3">
           <label className="grid gap-1 text-sm">
             <span className="font-medium text-zinc-700">주문 조회 토큰</span>
             <input
               value={lookupToken}
               onChange={(event) => setLookupToken(event.target.value)}
-              className="h-10 rounded-lg border border-zinc-300 px-3"
+              className="mq-input"
               placeholder="예: 3f6f5f63-..."
             />
           </label>
@@ -118,7 +118,7 @@ export function TrackClient({
             <input
               value={customerPhone}
               onChange={(event) => setCustomerPhone(event.target.value)}
-              className="h-10 rounded-lg border border-zinc-300 px-3"
+              className="mq-input"
               placeholder="01012345678"
             />
           </label>
@@ -128,7 +128,7 @@ export function TrackClient({
             <input
               value={storeSlug}
               onChange={(event) => setStoreSlug(event.target.value)}
-              className="h-10 rounded-lg border border-zinc-300 px-3"
+              className="mq-input"
               placeholder="예: nahyun-mart"
             />
           </label>
@@ -142,14 +142,14 @@ export function TrackClient({
           type="button"
           onClick={() => void fetchTracking()}
           disabled={isLoading}
-          className="mt-4 h-11 w-full rounded-lg bg-zinc-900 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          className="mq-btn-primary mt-4 h-11 w-full"
         >
           {isLoading ? "조회 중..." : "주문 조회"}
         </button>
       </section>
 
       {order ? (
-        <section className="space-y-3 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+        <section className="mq-card space-y-3 p-5">
           <h2 className="text-lg font-semibold text-zinc-900">주문 정보</h2>
           <div className="grid gap-2 text-sm text-zinc-700">
             <p className="flex justify-between gap-2">
@@ -192,7 +192,7 @@ export function TrackClient({
           ) : null}
 
           {bankInfo && order.price_status === "quoted" ? (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-900">
+            <div className="rounded-lg border border-brand-border bg-brand-soft px-3 py-3 text-sm text-brand-strong">
               <p className="font-semibold">{bankInfo.name} 입금 계좌</p>
               <p className="mt-1">{bankInfo.bankName}</p>
               <p>{bankInfo.bankAccountNumber}</p>
