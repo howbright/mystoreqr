@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { normalizePhone } from "@/lib/mystoreqr/format"
+import { checkRateLimit, getRequestIp } from "@/lib/mystoreqr/rate-limit"
 import { parsePositiveQuantity, validatePublicOrderInput } from "@/lib/mystoreqr/validation"
 import { createClient } from "@/lib/supabase/server"
 import type { TablesInsert } from "@/types/database.type"
@@ -51,6 +52,15 @@ function parseOrderItems(input: unknown): OrderItemPayload[] {
   }))
 }
 
+function parseClientSubmittedAt(value: unknown) {
+  const timestamp = Number(value)
+  if (!Number.isFinite(timestamp)) {
+    return null
+  }
+
+  return timestamp
+}
+
 export async function POST(request: Request, context: { params: Promise<{ slug: string }> }) {
   const { slug } = await context.params
   const normalizedSlug = slug.trim().toLowerCase()
@@ -59,11 +69,38 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
     return errorResponse("매장 정보가 올바르지 않습니다.", 404)
   }
 
+  const requestIp = getRequestIp(request.headers)
+  const rateLimit = checkRateLimit(`order:${requestIp}`, {
+    max: 6,
+    windowMs: 60_000,
+  })
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: `요청이 너무 많습니다. ${rateLimit.retryAfterSeconds}초 후 다시 시도해 주세요.` },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(rateLimit.retryAfterSeconds),
+        },
+      }
+    )
+  }
+
   let payload: Record<string, unknown>
   try {
     payload = (await request.json()) as Record<string, unknown>
   } catch {
     return errorResponse("요청 본문(JSON) 형식이 올바르지 않습니다.")
+  }
+
+  const honeypot = String(payload.website ?? "").trim()
+  if (honeypot) {
+    return errorResponse("비정상 요청이 감지되었습니다.", 400)
+  }
+
+  const submittedAt = parseClientSubmittedAt(payload.submittedAt)
+  if (!submittedAt || Date.now() - submittedAt < 1200) {
+    return errorResponse("요청이 너무 빠릅니다. 다시 시도해 주세요.", 400)
   }
 
   const fulfillmentType = payload.fulfillmentType
@@ -83,6 +120,15 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
     return errorResponse(orderItems)
   }
 
+  if (orderItems.length > 50) {
+    return errorResponse("한 번에 50개 이상 상품은 주문할 수 없습니다.")
+  }
+
+  const totalQuantity = orderItems.reduce((acc, item) => acc + item.quantity, 0)
+  if (totalQuantity > 100) {
+    return errorResponse("한 번에 100개 초과 수량은 주문할 수 없습니다.")
+  }
+
   const validatedOrderInput = (() => {
     try {
       return validatePublicOrderInput({
@@ -100,6 +146,18 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
 
   if (typeof validatedOrderInput === "string") {
     return errorResponse(validatedOrderInput)
+  }
+
+  if (validatedOrderInput.customerName.length > 30) {
+    return errorResponse("이름은 30자 이하로 입력해 주세요.")
+  }
+
+  if ((validatedOrderInput.deliveryAddress ?? "").length > 160) {
+    return errorResponse("배달 주소는 160자 이하로 입력해 주세요.")
+  }
+
+  if ((validatedOrderInput.customerNote ?? "").length > 500) {
+    return errorResponse("요청사항은 500자 이하로 입력해 주세요.")
   }
 
   const supabase = await createClient()

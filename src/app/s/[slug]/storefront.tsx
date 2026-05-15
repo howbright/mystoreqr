@@ -26,6 +26,7 @@ type OrderSubmitResult = {
 
 export function Storefront({ storeBundle }: StorefrontProps) {
   const { store, categories, products } = storeBundle
+  const [loadedAt] = useState(() => Date.now())
   const [quantities, setQuantities] = useState<Record<string, number>>({})
   const [customerForm, setCustomerForm] = useState<CustomerForm>({
     customerName: "",
@@ -110,6 +111,8 @@ export function Storefront({ storeBundle }: StorefrontProps) {
           deliveryAddress: customerForm.deliveryAddress,
           deliveryAddressDetail: customerForm.deliveryAddressDetail,
           customerNote: customerForm.customerNote,
+          submittedAt: loadedAt,
+          website: "",
           items: selectedItems.map((item) => ({
             productId: item.product.id,
             quantity: item.quantity,
