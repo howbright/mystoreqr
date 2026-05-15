@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
+import { requireAdminSessionOrRedirect } from "@/lib/mystoreqr/admin-auth"
 import { ORDER_STATUS_OPTIONS, PAYMENT_STATUS_OPTIONS } from "@/lib/mystoreqr/constants"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { Database } from "@/types/database.type"
@@ -55,6 +56,8 @@ function getAdminClientOrRedirect(storeSlug: string) {
 
 export async function setOrderQuoteAction(formData: FormData) {
   const storeSlug = toSafeString(formData.get("storeSlug"))
+  await requireAdminSessionOrRedirect(`/admin/orders?store=${encodeURIComponent(storeSlug)}`)
+
   const orderId = toSafeString(formData.get("orderId"))
   const subtotalAmount = parseNonNegativeInteger(toSafeString(formData.get("subtotalAmount")))
   const deliveryFee = parseNonNegativeInteger(toSafeString(formData.get("deliveryFee")))
@@ -101,6 +104,8 @@ export async function setOrderQuoteAction(formData: FormData) {
 
 export async function setOrderStatusAction(formData: FormData) {
   const storeSlug = toSafeString(formData.get("storeSlug"))
+  await requireAdminSessionOrRedirect(`/admin/orders?store=${encodeURIComponent(storeSlug)}`)
+
   const orderId = toSafeString(formData.get("orderId"))
   const nextStatus = toSafeString(formData.get("status")) as OrderStatus
   const statusNote = toSafeString(formData.get("statusNote"))
@@ -130,6 +135,8 @@ export async function setOrderStatusAction(formData: FormData) {
 
 export async function setPaymentStatusAction(formData: FormData) {
   const storeSlug = toSafeString(formData.get("storeSlug"))
+  await requireAdminSessionOrRedirect(`/admin/orders?store=${encodeURIComponent(storeSlug)}`)
+
   const orderId = toSafeString(formData.get("orderId"))
   const paymentStatus = toSafeString(formData.get("paymentStatus")) as PaymentStatus
 

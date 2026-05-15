@@ -1,5 +1,7 @@
 import Link from "next/link"
 
+import { logoutAdminAction } from "@/app/admin/_actions/auth"
+import { requireAdminSessionOrRedirect } from "@/lib/mystoreqr/admin-auth"
 import { getAdminOrdersByStoreId, getAdminStores } from "@/lib/mystoreqr/admin-queries"
 import { ORDER_STATUS_OPTIONS, PAYMENT_STATUS_OPTIONS } from "@/lib/mystoreqr/constants"
 import { formatKrw, formatPhone } from "@/lib/mystoreqr/format"
@@ -26,6 +28,16 @@ function formatDate(value: string) {
 
 export default async function AdminOrdersPage(props: PageProps<"/admin/orders">) {
   const searchParams = await props.searchParams
+  const queryString = new URLSearchParams()
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (typeof value === "string") {
+      queryString.set(key, value)
+    }
+  }
+
+  const nextPath = `/admin/orders${queryString.toString() ? `?${queryString.toString()}` : ""}`
+  await requireAdminSessionOrRedirect(nextPath)
+
   const storeSlugParam = firstString(searchParams.store)?.trim().toLowerCase()
   const successMessage = firstString(searchParams.ok)
   const errorMessage = firstString(searchParams.error)
@@ -57,12 +69,44 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-6 md:px-8">
       <header className="mq-card p-5">
-        <p className="text-sm font-medium text-brand-strong">MyStoreQR Admin</p>
-        <h1 className="mt-1 text-2xl font-bold text-zinc-900">주문 보드</h1>
-        <p className="mt-2 text-sm text-zinc-600">
-          매장: {selectedStore.name}
-          {selectedStore.phone ? ` (${formatPhone(selectedStore.phone)})` : ""}
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-brand-strong">MyStoreQR Admin</p>
+            <h1 className="mt-1 text-2xl font-bold text-zinc-900">주문 보드</h1>
+            <p className="mt-2 text-sm text-zinc-600">
+              매장: {selectedStore.name}
+              {selectedStore.phone ? ` (${formatPhone(selectedStore.phone)})` : ""}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/admin/products?store=${encodeURIComponent(selectedStore.slug)}`}
+              className="rounded-lg bg-brand-soft px-3 py-2 text-sm font-medium text-brand-strong hover:bg-brand-border"
+            >
+              상품 관리
+            </Link>
+            <Link
+              href={`/admin/dashboard?store=${encodeURIComponent(selectedStore.slug)}`}
+              className="rounded-lg bg-brand-soft px-3 py-2 text-sm font-medium text-brand-strong hover:bg-brand-border"
+            >
+              대시보드
+            </Link>
+            <Link
+              href={`/admin/onboarding?store=${encodeURIComponent(selectedStore.slug)}`}
+              className="rounded-lg bg-brand-soft px-3 py-2 text-sm font-medium text-brand-strong hover:bg-brand-border"
+            >
+              온보딩
+            </Link>
+            <form action={logoutAdminAction}>
+              <button
+                type="submit"
+                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
+              >
+                로그아웃
+              </button>
+            </form>
+          </div>
+        </div>
       </header>
 
       <nav className="flex flex-wrap gap-2">
