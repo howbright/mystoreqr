@@ -567,6 +567,9 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                   <input type="hidden" name="storeSlug" value={selectedStore.slug} />
                   <input type="hidden" name="returnTo" value={actionReturnTo} />
                   <p className="text-sm font-semibold text-zinc-900">주문 상태 빠른 변경</p>
+                  <p className="mt-1 text-xs text-zinc-600">
+                    현재 상태: <span className="font-semibold text-zinc-900">{orderStatusLabel(order.status)}</span>
+                  </p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {[
                       { key: "preparing", label: "준비중" },
@@ -578,7 +581,11 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                         type="submit"
                         name="status"
                         value={option.key}
-                        className="rounded-md bg-brand-soft px-3 py-1.5 text-xs font-medium text-brand-strong hover:bg-brand-border"
+                        className={`rounded-md px-3 py-1.5 text-xs font-medium ${
+                          order.status === option.key
+                            ? "bg-brand text-white ring-2 ring-brand-border"
+                            : "bg-brand-soft text-brand-strong hover:bg-brand-border"
+                        }`}
                       >
                         {option.label}
                       </button>
@@ -597,7 +604,11 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                     type="submit"
                     name="status"
                     value="canceled"
-                    className="mt-3 h-9 w-full rounded-md bg-rose-600 text-sm font-semibold text-white hover:bg-rose-700"
+                    className={`mt-3 h-9 w-full rounded-md text-sm font-semibold text-white ${
+                      order.status === "canceled"
+                        ? "bg-rose-700 ring-2 ring-rose-200"
+                        : "bg-rose-600 hover:bg-rose-700"
+                    }`}
                   >
                     주문 취소
                   </button>
@@ -608,6 +619,9 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                   <input type="hidden" name="storeSlug" value={selectedStore.slug} />
                   <input type="hidden" name="returnTo" value={actionReturnTo} />
                   <p className="text-sm font-semibold text-zinc-900">결제 상태 빠른 변경</p>
+                  <p className="mt-1 text-xs text-zinc-600">
+                    현재 상태: <span className="font-semibold text-zinc-900">{paymentStatusLabel(order.payment_status)}</span>
+                  </p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {[
                       { key: "waiting_transfer", label: "입금대기" },
@@ -619,7 +633,11 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                         type="submit"
                         name="paymentStatus"
                         value={option.key}
-                        className="rounded-md bg-brand-soft px-3 py-1.5 text-xs font-medium text-brand-strong hover:bg-brand-border"
+                        className={`rounded-md px-3 py-1.5 text-xs font-medium ${
+                          order.payment_status === option.key
+                            ? "bg-brand text-white ring-2 ring-brand-border"
+                            : "bg-brand-soft text-brand-strong hover:bg-brand-border"
+                        }`}
                       >
                         {option.label}
                       </button>
