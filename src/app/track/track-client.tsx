@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 
 import { formatKrw } from "@/lib/mystoreqr/format"
 import { orderStatusLabel, paymentStatusLabel, priceStatusLabel } from "@/lib/mystoreqr/status"
@@ -63,6 +63,10 @@ const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
   timeStyle: "short",
 })
 
+const timeFormatter = new Intl.DateTimeFormat("ko-KR", {
+  timeStyle: "medium",
+})
+
 function formatDate(value: string) {
   return dateFormatter.format(new Date(value))
 }
@@ -78,13 +82,25 @@ export function TrackClient({
   const [customerPhone, setCustomerPhone] = useState(initialPhone)
   const [storeSlug, setStoreSlug] = useState(initialStoreSlug)
   const [isLoading, setIsLoading] = useState(false)
+  const [isAutoRefreshing, setIsAutoRefreshing] = useState(false)
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false)
+  const [refreshIntervalSeconds, setRefreshIntervalSeconds] = useState(20)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [order, setOrder] = useState<TrackingOrder | null>(initialOrder)
   const [bankInfo, setBankInfo] = useState<BankInfo | null>(initialBankInfo)
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(
+    initialOrder ? new Date(initialOrder.updated_at).getTime() : null
+  )
 
-  async function fetchTracking() {
-    setIsLoading(true)
-    setErrorMessage(null)
+  const fetchTracking = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false
+    if (silent) {
+      setIsAutoRefreshing(true)
+    } else {
+      setIsLoading(true)
+      setErrorMessage(null)
+    }
+
     try {
       const response = await fetch("/api/public/tracking", {
         method: "POST",
@@ -103,14 +119,18 @@ export function TrackClient({
         | { order: TrackingOrder; bankInfo: BankInfo | null }
 
       if (!response.ok) {
-        setOrder(null)
-        setErrorMessage("error" in payload ? payload.error : "주문 조회에 실패했습니다.")
+        if (!silent) {
+          setOrder(null)
+          setErrorMessage("error" in payload ? payload.error : "주문 조회에 실패했습니다.")
+        }
         return
       }
 
       if ("error" in payload) {
-        setOrder(null)
-        setErrorMessage(payload.error)
+        if (!silent) {
+          setOrder(null)
+          setErrorMessage(payload.error)
+        }
         return
       }
 
@@ -118,13 +138,36 @@ export function TrackClient({
       if (payload.bankInfo) {
         setBankInfo(payload.bankInfo)
       }
+      setLastSyncedAt(Date.now())
     } catch {
-      setOrder(null)
-      setErrorMessage("네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
+      if (!silent) {
+        setOrder(null)
+        setErrorMessage("네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
+      }
     } finally {
-      setIsLoading(false)
+      if (silent) {
+        setIsAutoRefreshing(false)
+      } else {
+        setIsLoading(false)
+      }
     }
-  }
+  }, [lookupToken, customerPhone, storeSlug])
+
+  useEffect(() => {
+    if (!autoRefreshEnabled) {
+      return
+    }
+
+    if (!lookupToken.trim() || !customerPhone.trim()) {
+      return
+    }
+
+    const timer = window.setInterval(() => {
+      void fetchTracking({ silent: true })
+    }, refreshIntervalSeconds * 1000)
+
+    return () => window.clearInterval(timer)
+  }, [autoRefreshEnabled, refreshIntervalSeconds, lookupToken, customerPhone, fetchTracking])
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-6 md:px-6">
@@ -181,6 +224,37 @@ export function TrackClient({
         >
           {isLoading ? "조회 중..." : "주문 조회"}
         </button>
+
+        <div className="mt-3 rounded-lg bg-zinc-50 px-3 py-3 text-sm text-zinc-700">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={autoRefreshEnabled}
+                onChange={(event) => setAutoRefreshEnabled(event.target.checked)}
+              />
+              자동 새로고침
+            </label>
+            <label className="inline-flex items-center gap-2 text-xs">
+              주기
+              <select
+                value={refreshIntervalSeconds}
+                onChange={(event) => setRefreshIntervalSeconds(Number(event.target.value))}
+                disabled={!autoRefreshEnabled}
+                className="h-8 rounded-md border border-zinc-300 px-2 text-xs disabled:bg-zinc-100"
+              >
+                <option value={10}>10초</option>
+                <option value={20}>20초</option>
+                <option value={30}>30초</option>
+                <option value={60}>60초</option>
+              </select>
+            </label>
+          </div>
+          <p className="mt-2 text-xs text-zinc-500">
+            마지막 갱신: {lastSyncedAt ? timeFormatter.format(new Date(lastSyncedAt)) : "아직 없음"}
+            {isAutoRefreshing ? " · 자동 갱신 중..." : ""}
+          </p>
+        </div>
       </section>
 
       {order ? (
