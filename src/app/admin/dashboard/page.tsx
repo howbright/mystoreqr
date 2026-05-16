@@ -4,6 +4,7 @@ import { logoutAdminAction } from "@/app/admin/_actions/auth"
 import { requireAdminSessionOrRedirect } from "@/lib/mystoreqr/admin-auth"
 import {
   getAdminDashboardMetricsByStoreId,
+  getAdminRoleQueueCountsByStoreId,
   getAdminStores,
   getRecentOrderStatusEventsByStoreId,
 } from "@/lib/mystoreqr/admin-queries"
@@ -66,9 +67,10 @@ export default async function AdminDashboardPage(props: PageProps<"/admin/dashbo
   }
 
   const selectedStore = stores.find((store) => store.slug === storeSlugParam) ?? stores[0]
-  const [metrics, events] = await Promise.all([
+  const [metrics, events, roleQueueCounts] = await Promise.all([
     getAdminDashboardMetricsByStoreId(selectedStore.id, 7),
     getRecentOrderStatusEventsByStoreId(selectedStore.id, 30),
+    getAdminRoleQueueCountsByStoreId(selectedStore.id),
   ])
   const ordersLinks = {
     all: buildOrdersHref(selectedStore.slug, {}),
@@ -178,6 +180,9 @@ export default async function AdminDashboardPage(props: PageProps<"/admin/dashbo
           >
             <p className="text-sm font-semibold text-amber-900">{ORDER_WORK_VIEW_META.owner.label}</p>
             <p className="mt-0.5 text-xs text-amber-800">{ORDER_WORK_VIEW_META.owner.description}</p>
+            <p className="mt-1 text-xs font-medium text-amber-900">
+              처리대기 {roleQueueCounts.ownerPendingCount}건
+            </p>
           </Link>
           <Link
             href={ordersLinks.prepView}
@@ -185,6 +190,9 @@ export default async function AdminDashboardPage(props: PageProps<"/admin/dashbo
           >
             <p className="text-sm font-semibold text-sky-900">{ORDER_WORK_VIEW_META.prep.label}</p>
             <p className="mt-0.5 text-xs text-sky-800">{ORDER_WORK_VIEW_META.prep.description}</p>
+            <p className="mt-1 text-xs font-medium text-sky-900">
+              준비대기 {roleQueueCounts.prepPendingCount}건
+            </p>
           </Link>
           <Link
             href={ordersLinks.deliveryView}
@@ -192,6 +200,9 @@ export default async function AdminDashboardPage(props: PageProps<"/admin/dashbo
           >
             <p className="text-sm font-semibold text-emerald-900">{ORDER_WORK_VIEW_META.delivery.label}</p>
             <p className="mt-0.5 text-xs text-emerald-800">{ORDER_WORK_VIEW_META.delivery.description}</p>
+            <p className="mt-1 text-xs font-medium text-emerald-900">
+              배달중 {roleQueueCounts.deliveringCount}건
+            </p>
           </Link>
         </div>
       </section>

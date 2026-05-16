@@ -95,6 +95,12 @@ export type AdminOrderStatusEvent = Pick<
   order_code: string | null
 }
 
+export type AdminRoleQueueCounts = {
+  ownerPendingCount: number
+  prepPendingCount: number
+  deliveringCount: number
+}
+
 export async function getAdminStores(): Promise<AdminStore[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -282,4 +288,58 @@ export async function getRecentOrderStatusEventsByStoreId(
     ...row,
     order_code: row.orders?.order_code ?? null,
   }))
+}
+
+function toCountValue(count: number | null) {
+  return typeof count === "number" && Number.isFinite(count) ? count : 0
+}
+
+export async function getAdminRoleQueueCountsByStoreId(storeId: string): Promise<AdminRoleQueueCounts> {
+  const supabase = await createClient()
+
+  const [ownerResult, prepResult, deliveryResult] = await Promise.all([
+    supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("store_id", storeId)
+      .neq("status", "completed")
+      .neq("status", "canceled")
+      .or(
+        [
+          "price_status.eq.needs_review",
+          "payment_status.eq.waiting_transfer",
+          "payment_status.eq.transfer_submitted",
+          "payment_status.eq.rejected",
+        ].join(",")
+      ),
+    supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("store_id", storeId)
+      .or(["status.eq.payment_confirmed", "and(status.eq.pending,payment_status.eq.confirmed)"].join(",")),
+    supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("store_id", storeId)
+      .eq("fulfillment_type", "delivery")
+      .eq("status", "delivering"),
+  ])
+
+  if (ownerResult.error) {
+    throw new Error(`사장님 처리대기 집계 실패: ${ownerResult.error.message}`)
+  }
+
+  if (prepResult.error) {
+    throw new Error(`준비대기 집계 실패: ${prepResult.error.message}`)
+  }
+
+  if (deliveryResult.error) {
+    throw new Error(`배달중 집계 실패: ${deliveryResult.error.message}`)
+  }
+
+  return {
+    ownerPendingCount: toCountValue(ownerResult.count),
+    prepPendingCount: toCountValue(prepResult.count),
+    deliveringCount: toCountValue(deliveryResult.count),
+  }
 }
