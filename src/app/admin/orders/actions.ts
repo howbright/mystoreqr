@@ -6,6 +6,12 @@ import { redirect } from "next/navigation"
 import { writeAdminActionLog } from "@/lib/mystoreqr/admin-action-logs"
 import { requireAdminSessionOrRedirect } from "@/lib/mystoreqr/admin-auth"
 import { ORDER_STATUS_OPTIONS, PAYMENT_STATUS_OPTIONS } from "@/lib/mystoreqr/constants"
+import {
+  canManageQuoteInView,
+  getAllowedOrderStatusForAction,
+  getAllowedPaymentStatusForAction,
+  parseOrderWorkView,
+} from "@/lib/mystoreqr/order-work-view"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { Database } from "@/types/database.type"
 
@@ -107,11 +113,16 @@ function getAdminClientOrRedirect(storeSlug: string, returnTo = "") {
 export async function setOrderQuoteAction(formData: FormData) {
   const storeSlug = toSafeString(formData.get("storeSlug"))
   const returnTo = toSafeString(formData.get("returnTo"))
+  const actorView = parseOrderWorkView(toSafeString(formData.get("actorView")) || undefined)
   await requireAdminSessionOrRedirect(`/admin/orders?store=${encodeURIComponent(storeSlug)}`)
 
   const orderId = toSafeString(formData.get("orderId"))
   const deliveryFee = parseNonNegativeInteger(toSafeString(formData.get("deliveryFee")))
   const priceNote = toSafeString(formData.get("priceNote"))
+
+  if (!canManageQuoteInView(actorView)) {
+    redirectWithError(storeSlug, "현재 역할 뷰에서는 가격 확정을 할 수 없습니다.", returnTo)
+  }
 
   if (!isUuidLike(orderId)) {
     redirectWithError(storeSlug, "주문 ID 형식이 올바르지 않습니다.", returnTo)
@@ -249,11 +260,13 @@ export async function setOrderQuoteAction(formData: FormData) {
 export async function setOrderStatusAction(formData: FormData) {
   const storeSlug = toSafeString(formData.get("storeSlug"))
   const returnTo = toSafeString(formData.get("returnTo"))
+  const actorView = parseOrderWorkView(toSafeString(formData.get("actorView")) || undefined)
   await requireAdminSessionOrRedirect(`/admin/orders?store=${encodeURIComponent(storeSlug)}`)
 
   const orderId = toSafeString(formData.get("orderId"))
   const nextStatus = toSafeString(formData.get("status")) as OrderStatus
   const statusNote = toSafeString(formData.get("statusNote"))
+  const allowedStatuses = getAllowedOrderStatusForAction(actorView)
 
   if (!isUuidLike(orderId)) {
     redirectWithError(storeSlug, "주문 ID 형식이 올바르지 않습니다.", returnTo)
@@ -261,6 +274,10 @@ export async function setOrderStatusAction(formData: FormData) {
 
   if (!ORDER_STATUS_OPTIONS.includes(nextStatus)) {
     redirectWithError(storeSlug, "변경할 주문 상태 값이 올바르지 않습니다.", returnTo)
+  }
+
+  if (!allowedStatuses.includes(nextStatus)) {
+    redirectWithError(storeSlug, "현재 역할 뷰에서는 해당 주문 상태로 변경할 수 없습니다.", returnTo)
   }
 
   const supabase = getAdminClientOrRedirect(storeSlug, returnTo)
@@ -292,10 +309,12 @@ export async function setOrderStatusAction(formData: FormData) {
 export async function setPaymentStatusAction(formData: FormData) {
   const storeSlug = toSafeString(formData.get("storeSlug"))
   const returnTo = toSafeString(formData.get("returnTo"))
+  const actorView = parseOrderWorkView(toSafeString(formData.get("actorView")) || undefined)
   await requireAdminSessionOrRedirect(`/admin/orders?store=${encodeURIComponent(storeSlug)}`)
 
   const orderId = toSafeString(formData.get("orderId"))
   const paymentStatus = toSafeString(formData.get("paymentStatus")) as PaymentStatus
+  const allowedPaymentStatuses = getAllowedPaymentStatusForAction(actorView)
 
   if (!isUuidLike(orderId)) {
     redirectWithError(storeSlug, "주문 ID 형식이 올바르지 않습니다.", returnTo)
@@ -303,6 +322,10 @@ export async function setPaymentStatusAction(formData: FormData) {
 
   if (!PAYMENT_STATUS_OPTIONS.includes(paymentStatus)) {
     redirectWithError(storeSlug, "결제 상태 값이 올바르지 않습니다.", returnTo)
+  }
+
+  if (!allowedPaymentStatuses.includes(paymentStatus)) {
+    redirectWithError(storeSlug, "현재 역할 뷰에서는 결제 상태를 변경할 수 없습니다.", returnTo)
   }
 
   const supabase = getAdminClientOrRedirect(storeSlug, returnTo)
