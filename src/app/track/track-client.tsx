@@ -117,6 +117,7 @@ export function TrackClient({
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(
     initialOrder ? new Date(initialOrder.updated_at).getTime() : null
   )
+  const [urlCopied, setUrlCopied] = useState(false)
 
   const fetchTracking = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false
@@ -194,6 +195,16 @@ export function TrackClient({
 
     return () => window.clearInterval(timer)
   }, [autoRefreshEnabled, refreshIntervalSeconds, lookupToken, customerPhone, fetchTracking])
+
+  async function copyCurrentTrackingUrl() {
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      setUrlCopied(true)
+      setTimeout(() => setUrlCopied(false), 1200)
+    } catch {
+      setUrlCopied(false)
+    }
+  }
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-6 md:px-6">
@@ -328,6 +339,13 @@ export function TrackClient({
           })()}
 
           <h2 className="text-lg font-semibold text-zinc-900">주문 정보</h2>
+          <button
+            type="button"
+            onClick={() => void copyCurrentTrackingUrl()}
+            className="rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-200"
+          >
+            {urlCopied ? "링크 복사됨" : "현재 조회링크 복사"}
+          </button>
           <div className="rounded-xl border border-brand-border bg-brand-soft p-4">
             <p className="text-xs font-medium text-brand-strong">현재 주문 상태</p>
             <p
