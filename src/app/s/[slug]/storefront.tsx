@@ -67,6 +67,11 @@ function parseRecentOrder(value: string | null): RecentOrder | null {
 
 export function Storefront({ storeBundle }: StorefrontProps) {
   const { store, categories, products } = storeBundle
+  const storeName = store.slug === "jinro" ? "진로마트" : store.name
+  const storePhone = store.slug === "jinro" ? "0507-1392-5070" : store.phone
+  const storeRoadAddress =
+    store.slug === "jinro" ? "경기도 성남시 중원구 둔촌대로 159 1층 진로마트 모란점" : store.address_road
+  const storeJibunAddress = store.slug === "jinro" ? "성남동 3791" : store.address_detail
   const [loadedAt] = useState(() => Date.now())
   const [quantities, setQuantities] = useState<Record<string, number>>({})
   const [customerForm, setCustomerForm] = useState<CustomerForm>({
@@ -223,10 +228,12 @@ export function Storefront({ storeBundle }: StorefrontProps) {
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 md:px-8">
       <header className="mq-card p-5">
         <p className="text-sm font-medium text-brand-strong">MyStoreQR 주문</p>
-        <h1 className="mt-1 text-2xl font-bold text-zinc-900">{store.name}</h1>
+        <h1 className="mt-1 text-2xl font-bold text-zinc-900">{storeName}</h1>
         {store.description ? <p className="mt-2 text-sm text-zinc-600">{store.description}</p> : null}
+        {storeRoadAddress ? <p className="mt-2 text-sm text-zinc-700">{storeRoadAddress}</p> : null}
+        {storeJibunAddress ? <p className="mt-1 text-xs text-zinc-500">지번: {storeJibunAddress}</p> : null}
         <div className="mt-3 flex flex-wrap gap-2 text-xs text-zinc-600">
-          <span className="mq-chip">전화 {formatPhone(store.phone)}</span>
+          <span className="mq-chip">전화 {formatPhone(storePhone)}</span>
           <span className="mq-chip">
             최소주문 {formatKrw(store.min_order_amount)}
           </span>
@@ -482,11 +489,20 @@ export function Storefront({ storeBundle }: StorefrontProps) {
               ) : null}
 
               {submitResult ? (
-                <div className="rounded-lg bg-emerald-50 px-3 py-3 text-sm text-emerald-700">
-                  <p className="font-semibold">주문이 접수되었습니다.</p>
-                  <p className="mt-1">주문번호: {formatCustomerOrderCode(submitResult.orderCode)}</p>
-                  <Link href={submitResult.trackingPath} className="mt-2 inline-block text-brand-strong underline">
-                    주문 추적 바로가기
+                <div className="rounded-lg border-2 border-dashed border-zinc-900 bg-white px-4 py-5 text-center shadow-sm">
+                  <p className="text-sm font-bold text-zinc-900">주문표</p>
+                  <p className="mt-2 text-xs font-semibold text-rose-700">
+                    주문 상태 조회에 필요하니 주문번호를 반드시 기억해 주세요.
+                  </p>
+                  <p className="mt-4 text-6xl font-black tracking-normal text-zinc-950">
+                    {formatCustomerOrderCode(submitResult.orderCode)}
+                  </p>
+                  <p className="mt-3 text-xs text-zinc-500">화면을 닫기 전에 번호를 확인해 주세요.</p>
+                  <Link
+                    href={submitResult.trackingPath}
+                    className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-lg bg-brand px-4 text-sm font-bold text-white hover:bg-brand-strong"
+                  >
+                    주문 상태 확인하기
                   </Link>
                 </div>
               ) : null}

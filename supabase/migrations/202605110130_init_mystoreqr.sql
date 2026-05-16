@@ -29,6 +29,7 @@ begin
     'pending',
     'payment_confirmed',
     'preparing',
+    'delivering',
     'completed',
     'canceled'
   );
@@ -43,7 +44,8 @@ begin
     'waiting_transfer',
     'transfer_submitted',
     'confirmed',
-    'rejected'
+    'rejected',
+    'not_ready'
   );
 exception
   when duplicate_object then null;

@@ -33,7 +33,7 @@ export default async function HomePage() {
       <section className="grid gap-3 md:grid-cols-2">
         <Link href="/track" className="mq-card p-5 transition-colors hover:bg-brand-soft">
           <p className="text-sm font-semibold text-zinc-900">주문 추적</p>
-          <p className="mt-1 text-sm text-zinc-600">토큰 + 연락처로 가격/입금/배송 상태 조회</p>
+          <p className="mt-1 text-sm text-zinc-600">주문번호 + 연락처로 가격/입금/배송 상태 조회</p>
         </Link>
         <Link href="/admin/orders" className="mq-card p-5 transition-colors hover:bg-brand-soft">
           <p className="text-sm font-semibold text-zinc-900">관리자 주문 보드</p>
