@@ -20,17 +20,32 @@ type CustomerForm = {
 }
 
 type OrderSubmitResult = {
+  orderId: string
   orderCode: string
   trackingPath: string
 }
 
-type RecentOrder = OrderSubmitResult & {
+type RecentOrder = Omit<OrderSubmitResult, "orderId"> & {
+  orderId?: string
   customerPhone: string
   savedAt: number
 }
 
 function getRecentOrderStorageKey(storeSlug: string) {
   return `mystoreqr:recent-order:${storeSlug}`
+}
+
+function urlBase64ToUint8Array(value: string) {
+  const padding = "=".repeat((4 - (value.length % 4)) % 4)
+  const base64 = `${value}${padding}`.replace(/-/g, "+").replace(/_/g, "/")
+  const rawData = window.atob(base64)
+  const output = new Uint8Array(rawData.length)
+
+  for (let index = 0; index < rawData.length; index += 1) {
+    output[index] = rawData.charCodeAt(index)
+  }
+
+  return output
 }
 
 function subscribeToRecentOrderChange(onStoreChange: () => void) {
@@ -43,26 +58,25 @@ function subscribeToRecentOrderChange(onStoreChange: () => void) {
   }
 }
 
-function parseRecentOrder(value: string | null): RecentOrder | null {
+function isRecentOrder(value: Partial<RecentOrder>): value is RecentOrder {
+  return Boolean(value.orderCode && value.trackingPath && value.customerPhone && value.savedAt)
+}
+
+function parseRecentOrders(value: string | null): RecentOrder[] {
   if (!value) {
-    return null
+    return []
   }
 
   try {
-    const parsed = JSON.parse(value) as Partial<RecentOrder>
-    if (parsed.orderCode && parsed.trackingPath && parsed.customerPhone && parsed.savedAt) {
-      return {
-        orderCode: parsed.orderCode,
-        trackingPath: parsed.trackingPath,
-        customerPhone: parsed.customerPhone,
-        savedAt: parsed.savedAt,
-      }
+    const parsed = JSON.parse(value) as Partial<RecentOrder> | Partial<RecentOrder>[]
+    if (Array.isArray(parsed)) {
+      return parsed.filter(isRecentOrder).slice(0, 3)
     }
-  } catch {
-    return null
-  }
 
-  return null
+    return isRecentOrder(parsed) ? [parsed] : []
+  } catch {
+    return []
+  }
 }
 
 export function Storefront({ storeBundle }: StorefrontProps) {
@@ -83,7 +97,9 @@ export function Storefront({ storeBundle }: StorefrontProps) {
     customerNote: "",
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isSubscribingToPush, setIsSubscribingToPush] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [pushMessage, setPushMessage] = useState<string | null>(null)
   const [submitResult, setSubmitResult] = useState<OrderSubmitResult | null>(null)
   const recentOrderStorageKey = getRecentOrderStorageKey(store.slug)
   const recentOrderSnapshot = useSyncExternalStore(
@@ -91,7 +107,7 @@ export function Storefront({ storeBundle }: StorefrontProps) {
     () => window.localStorage.getItem(recentOrderStorageKey),
     () => null
   )
-  const recentOrder = useMemo(() => parseRecentOrder(recentOrderSnapshot), [recentOrderSnapshot])
+  const recentOrders = useMemo(() => parseRecentOrders(recentOrderSnapshot), [recentOrderSnapshot])
 
   const categoriesWithProducts = useMemo(() => {
     const group = categories.map((category) => ({
@@ -188,7 +204,7 @@ export function Storefront({ storeBundle }: StorefrontProps) {
 
       const payload = (await response.json()) as
         | { error: string }
-        | { orderCode: string; trackingPath: string }
+        | { orderId: string; orderCode: string; trackingPath: string }
 
       if (!response.ok) {
         setErrorMessage("error" in payload ? payload.error : "주문 접수에 실패했습니다.")
@@ -201,6 +217,7 @@ export function Storefront({ storeBundle }: StorefrontProps) {
       }
 
       setSubmitResult({
+        orderId: payload.orderId,
         orderCode: payload.orderCode,
         trackingPath: payload.trackingPath,
       })
@@ -211,7 +228,13 @@ export function Storefront({ storeBundle }: StorefrontProps) {
         savedAt: Date.now(),
       }
       try {
-        window.localStorage.setItem(recentOrderStorageKey, JSON.stringify(nextRecentOrder))
+        const nextRecentOrders = [
+          nextRecentOrder,
+          ...parseRecentOrders(window.localStorage.getItem(recentOrderStorageKey)).filter(
+            (order) => order.orderCode !== nextRecentOrder.orderCode
+          ),
+        ].slice(0, 3)
+        window.localStorage.setItem(recentOrderStorageKey, JSON.stringify(nextRecentOrders))
         window.dispatchEvent(new Event("mystoreqr-recent-order"))
       } catch {
         // 주문은 이미 접수되었으므로 최근 주문 저장 실패는 사용자 플로우를 막지 않습니다.
@@ -221,6 +244,72 @@ export function Storefront({ storeBundle }: StorefrontProps) {
       setErrorMessage("네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  async function subscribeToQuotePush() {
+    setPushMessage(null)
+
+    if (!submitResult) {
+      setPushMessage("주문 접수 후 알림을 신청할 수 있습니다.")
+      return
+    }
+
+    const vapidPublicKey = process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY
+    if (!vapidPublicKey) {
+      setPushMessage("알림 설정이 아직 준비되지 않았습니다.")
+      return
+    }
+
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+      setPushMessage("이 브라우저는 웹 푸시 알림을 지원하지 않습니다.")
+      return
+    }
+
+    if (!window.isSecureContext) {
+      setPushMessage("알림은 HTTPS 환경에서 사용할 수 있습니다.")
+      return
+    }
+
+    setIsSubscribingToPush(true)
+    try {
+      const permission = await Notification.requestPermission()
+      if (permission !== "granted") {
+        setPushMessage("알림 권한이 허용되지 않았습니다.")
+        return
+      }
+
+      const registration = await navigator.serviceWorker.register("/sw.js")
+      const existingSubscription = await registration.pushManager.getSubscription()
+      const subscription =
+        existingSubscription ??
+        (await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+        }))
+
+      const response = await fetch("/api/public/push-subscriptions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          orderId: submitResult.orderId,
+          ...subscription.toJSON(),
+        }),
+      })
+
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: string }
+        setPushMessage(payload.error ?? "알림 신청에 실패했습니다.")
+        return
+      }
+
+      setPushMessage("금액이 확정되면 이 브라우저로 알림을 보내드릴게요.")
+    } catch {
+      setPushMessage("알림 신청 중 오류가 발생했습니다.")
+    } finally {
+      setIsSubscribingToPush(false)
     }
   }
 
@@ -239,13 +328,21 @@ export function Storefront({ storeBundle }: StorefrontProps) {
           </span>
           <span className="mq-chip">기본배달비 {formatKrw(store.delivery_fee)}</span>
         </div>
-        {recentOrder ? (
-          <Link
-            href={recentOrder.trackingPath}
-            className="mt-4 inline-flex rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-strong"
-          >
-            최근 주문 추적하기 #{formatCustomerOrderCode(recentOrder.orderCode)}
-          </Link>
+        {recentOrders.length > 0 ? (
+          <div className="mt-4 grid gap-2">
+            <p className="text-xs font-semibold text-zinc-600">최근 주문 추적</p>
+            <div className="flex flex-wrap gap-2">
+              {recentOrders.map((order) => (
+                <Link
+                  key={`${order.orderCode}-${order.savedAt}`}
+                  href={order.trackingPath}
+                  className="inline-flex rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-strong"
+                >
+                  #{formatCustomerOrderCode(order.orderCode)}
+                </Link>
+              ))}
+            </div>
+          </div>
         ) : null}
       </header>
 
@@ -498,9 +595,18 @@ export function Storefront({ storeBundle }: StorefrontProps) {
                     {formatCustomerOrderCode(submitResult.orderCode)}
                   </p>
                   <p className="mt-3 text-xs text-zinc-500">화면을 닫기 전에 번호를 확인해 주세요.</p>
+                  <button
+                    type="button"
+                    onClick={() => void subscribeToQuotePush()}
+                    disabled={isSubscribingToPush}
+                    className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-lg border border-brand px-4 text-sm font-bold text-brand-strong hover:bg-brand-soft disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isSubscribingToPush ? "알림 신청 중..." : "금액 확정 알림 받기"}
+                  </button>
+                  {pushMessage ? <p className="mt-2 text-xs text-zinc-600">{pushMessage}</p> : null}
                   <Link
                     href={submitResult.trackingPath}
-                    className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-lg bg-brand px-4 text-sm font-bold text-white hover:bg-brand-strong"
+                    className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-lg bg-brand px-4 text-sm font-bold text-white hover:bg-brand-strong"
                   >
                     주문 상태 확인하기
                   </Link>

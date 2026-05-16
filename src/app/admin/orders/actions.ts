@@ -6,6 +6,7 @@ import { redirect } from "next/navigation"
 import { writeAdminActionLog } from "@/lib/mystoreqr/admin-action-logs"
 import { requireAdminSessionOrRedirect } from "@/lib/mystoreqr/admin-auth"
 import { ORDER_STATUS_OPTIONS, PAYMENT_STATUS_OPTIONS } from "@/lib/mystoreqr/constants"
+import { sendQuoteReadyPush } from "@/lib/mystoreqr/push"
 import {
   canManageQuoteInView,
   getAllowedOrderStatusForAction,
@@ -252,6 +253,8 @@ export async function setOrderQuoteAction(formData: FormData) {
       priceNote: priceNote || null,
     },
   })
+
+  await sendQuoteReadyPush(orderId)
 
   revalidatePath("/admin/orders")
   redirectWithSuccess(storeSlug, "가격 확정을 완료했습니다.", returnTo)
