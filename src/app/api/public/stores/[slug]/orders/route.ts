@@ -163,7 +163,7 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
   const supabase = await createClient()
   const { data: store, error: storeError } = await supabase
     .from("stores")
-    .select("id, slug, delivery_enabled, pickup_enabled, is_active")
+    .select("id, slug, delivery_enabled, pickup_enabled, is_active, min_order_amount")
     .eq("slug", normalizedSlug)
     .eq("is_active", true)
     .maybeSingle()
@@ -209,6 +209,18 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
 
     if (matched.is_sold_out) {
       return errorResponse(`품절 상품이 포함되어 있습니다: ${matched.name}`)
+    }
+  }
+
+  const allPricesKnown = orderItems.every((item) => productMap.get(item.productId)?.price != null)
+  if (allPricesKnown) {
+    const subtotal = orderItems.reduce((acc, item) => {
+      const productPrice = productMap.get(item.productId)?.price ?? 0
+      return acc + productPrice * item.quantity
+    }, 0)
+
+    if (subtotal < store.min_order_amount) {
+      return errorResponse(`최소 주문금액은 ${store.min_order_amount.toLocaleString("ko-KR")}원입니다.`)
     }
   }
 

@@ -74,6 +74,8 @@ export function Storefront({ storeBundle }: StorefrontProps) {
 
   const knownSubtotal = selectedItems.reduce((acc, row) => acc + (row.lineTotal ?? 0), 0)
   const hasUnknownPrice = selectedItems.some((row) => row.lineTotal === null)
+  const isBelowMinOrderAmount = !hasUnknownPrice && knownSubtotal < store.min_order_amount
+  const missingAmountToMinOrder = Math.max(store.min_order_amount - knownSubtotal, 0)
 
   function updateQuantity(productId: string, quantity: number) {
     setQuantities((prev) => {
@@ -94,6 +96,11 @@ export function Storefront({ storeBundle }: StorefrontProps) {
 
     if (selectedItems.length === 0) {
       setErrorMessage("최소 1개 이상의 상품을 선택해 주세요.")
+      return
+    }
+
+    if (isBelowMinOrderAmount) {
+      setErrorMessage(`최소 주문금액 ${formatKrw(store.min_order_amount)} 이상부터 주문할 수 있습니다.`)
       return
     }
 
@@ -243,6 +250,11 @@ export function Storefront({ storeBundle }: StorefrontProps) {
                     <span>현재 계산 가능 합계</span>
                     <strong>{formatKrw(knownSubtotal)}</strong>
                   </p>
+                  {isBelowMinOrderAmount ? (
+                    <p className="mt-1 text-xs text-rose-700">
+                      최소 주문금액까지 {formatKrw(missingAmountToMinOrder)} 더 담아주세요.
+                    </p>
+                  ) : null}
                   {hasUnknownPrice ? (
                     <p className="mt-1 text-xs text-amber-700">
                       일부 상품 가격이 미등록 상태라, 최종 금액은 사장님 확인 후 안내됩니다.
@@ -394,7 +406,7 @@ export function Storefront({ storeBundle }: StorefrontProps) {
 
               <button
                 type="submit"
-                disabled={isSubmitting || selectedItems.length === 0}
+                disabled={isSubmitting || selectedItems.length === 0 || isBelowMinOrderAmount}
                 className="mq-btn-primary h-11 w-full"
               >
                 {isSubmitting ? "주문 접수 중..." : "주문 접수"}
