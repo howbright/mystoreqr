@@ -72,19 +72,18 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
     stores[0]
 
   const orders = await getAdminOrdersByStoreId(selectedStore.id, 150)
-  const statusFilter = ORDER_STATUS_OPTIONS.includes(statusFilterRaw as (typeof ORDER_STATUS_OPTIONS)[number])
-    ? statusFilterRaw
-    : "all"
-  const paymentFilter = PAYMENT_STATUS_OPTIONS.includes(
-    paymentFilterRaw as (typeof PAYMENT_STATUS_OPTIONS)[number]
-  )
-    ? paymentFilterRaw
-    : "all"
-  const priceFilter = PRICE_STATUS_OPTIONS.includes(
-    priceFilterRaw as (typeof PRICE_STATUS_OPTIONS)[number]
-  )
-    ? priceFilterRaw
-    : "all"
+  const statusFilter: (typeof ORDER_STATUS_OPTIONS)[number] | "all" =
+    ORDER_STATUS_OPTIONS.includes(statusFilterRaw as (typeof ORDER_STATUS_OPTIONS)[number])
+      ? (statusFilterRaw as (typeof ORDER_STATUS_OPTIONS)[number])
+      : "all"
+  const paymentFilter: (typeof PAYMENT_STATUS_OPTIONS)[number] | "all" =
+    PAYMENT_STATUS_OPTIONS.includes(paymentFilterRaw as (typeof PAYMENT_STATUS_OPTIONS)[number])
+      ? (paymentFilterRaw as (typeof PAYMENT_STATUS_OPTIONS)[number])
+      : "all"
+  const priceFilter: (typeof PRICE_STATUS_OPTIONS)[number] | "all" =
+    PRICE_STATUS_OPTIONS.includes(priceFilterRaw as (typeof PRICE_STATUS_OPTIONS)[number])
+      ? (priceFilterRaw as (typeof PRICE_STATUS_OPTIONS)[number])
+      : "all"
   const normalizedKeyword = keywordFilter.toLowerCase()
   const filteredOrders = orders.filter((order) => {
     if (statusFilter !== "all" && order.status !== statusFilter) {
@@ -116,6 +115,31 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
 
     return searchable.includes(normalizedKeyword)
   })
+  const hasActiveFilters =
+    statusFilter !== "all" ||
+    paymentFilter !== "all" ||
+    priceFilter !== "all" ||
+    normalizedKeyword.length > 0
+  const persistentFilterParams = new URLSearchParams()
+  if (statusFilter !== "all") {
+    persistentFilterParams.set("status", statusFilter)
+  }
+  if (paymentFilter !== "all") {
+    persistentFilterParams.set("payment", paymentFilter)
+  }
+  if (priceFilter !== "all") {
+    persistentFilterParams.set("price", priceFilter)
+  }
+  if (keywordFilter) {
+    persistentFilterParams.set("q", keywordFilter)
+  }
+  function buildOrdersHref(storeSlug: string) {
+    const params = new URLSearchParams(persistentFilterParams)
+    params.set("store", storeSlug)
+    return `/admin/orders?${params.toString()}`
+  }
+  const resetFiltersHref = `/admin/orders?store=${encodeURIComponent(selectedStore.slug)}`
+  const actionReturnTo = buildOrdersHref(selectedStore.slug)
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-6 md:px-8">
@@ -164,7 +188,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
         {stores.map((store) => (
           <Link
             key={store.id}
-            href={`/admin/orders?store=${encodeURIComponent(store.slug)}`}
+            href={buildOrdersHref(store.slug)}
             className={`rounded-full px-4 py-2 text-sm ${
               store.id === selectedStore.id
                 ? "bg-brand text-white"
@@ -240,9 +264,40 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
               <button type="submit" className="mq-btn-primary h-10 min-w-24 rounded-md">
                 필터 적용
               </button>
+              <Link
+                href={resetFiltersHref}
+                className="inline-flex h-10 min-w-24 items-center justify-center rounded-md border border-zinc-300 px-3 text-sm text-zinc-700 hover:bg-zinc-100"
+              >
+                초기화
+              </Link>
             </div>
           </label>
         </form>
+        {hasActiveFilters ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+            <span className="rounded-full bg-zinc-100 px-2 py-1 text-zinc-700">필터 적용중</span>
+            {statusFilter !== "all" ? (
+              <span className="rounded-full bg-brand-soft px-2 py-1 text-brand-strong">
+                주문: {orderStatusLabel(statusFilter)}
+              </span>
+            ) : null}
+            {paymentFilter !== "all" ? (
+              <span className="rounded-full bg-brand-soft px-2 py-1 text-brand-strong">
+                결제: {paymentStatusLabel(paymentFilter)}
+              </span>
+            ) : null}
+            {priceFilter !== "all" ? (
+              <span className="rounded-full bg-brand-soft px-2 py-1 text-brand-strong">
+                가격: {priceStatusLabel(priceFilter)}
+              </span>
+            ) : null}
+            {keywordFilter ? (
+              <span className="rounded-full bg-brand-soft px-2 py-1 text-brand-strong">
+                검색: {keywordFilter}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
       </section>
 
       <section className="grid gap-3 md:grid-cols-3">
@@ -374,6 +429,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                 <form action={setOrderQuoteAction} className="rounded-xl border border-brand-border p-3">
                   <input type="hidden" name="orderId" value={order.id} />
                   <input type="hidden" name="storeSlug" value={selectedStore.slug} />
+                  <input type="hidden" name="returnTo" value={actionReturnTo} />
                   <p className="text-sm font-semibold text-zinc-900">가격 확정</p>
                   {isPaymentConfirmed ? (
                     <p className="mt-2 rounded-md bg-emerald-50 px-2 py-1 text-xs text-emerald-700">
@@ -423,6 +479,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                 <form action={setOrderStatusAction} className="rounded-xl border border-brand-border p-3">
                   <input type="hidden" name="orderId" value={order.id} />
                   <input type="hidden" name="storeSlug" value={selectedStore.slug} />
+                  <input type="hidden" name="returnTo" value={actionReturnTo} />
                   <p className="text-sm font-semibold text-zinc-900">주문 상태 빠른 변경</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {[
@@ -463,6 +520,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                 <form action={setPaymentStatusAction} className="rounded-xl border border-brand-border p-3">
                   <input type="hidden" name="orderId" value={order.id} />
                   <input type="hidden" name="storeSlug" value={selectedStore.slug} />
+                  <input type="hidden" name="returnTo" value={actionReturnTo} />
                   <p className="text-sm font-semibold text-zinc-900">결제 상태 빠른 변경</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {[
