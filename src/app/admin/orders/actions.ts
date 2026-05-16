@@ -75,6 +75,21 @@ export async function setOrderQuoteAction(formData: FormData) {
   const supabase = getAdminClientOrRedirect(storeSlug)
   const totalAmount = subtotalAmount + deliveryFee
 
+  const { data: existingOrder, error: existingOrderError } = await supabase
+    .from("orders")
+    .select("payment_status")
+    .eq("id", orderId)
+    .maybeSingle()
+
+  if (existingOrderError) {
+    redirectWithError(storeSlug, `주문 조회 실패: ${existingOrderError.message}`)
+  }
+
+  const nextPaymentStatus =
+    existingOrder?.payment_status === "not_ready"
+      ? "waiting_transfer"
+      : existingOrder?.payment_status ?? "waiting_transfer"
+
   const { data, error } = await supabase
     .from("orders")
     .update({
@@ -85,11 +100,11 @@ export async function setOrderQuoteAction(formData: FormData) {
       price_note: priceNote || null,
       quoted_at: new Date().toISOString(),
       quoted_by: null,
-      payment_status: "waiting_transfer",
+      payment_status: nextPaymentStatus,
     })
     .eq("id", orderId)
     .eq("status", "pending")
-    .select("id")
+    .select("id, payment_status")
 
   if (error) {
     redirectWithError(storeSlug, `가격 확정 실패: ${error.message}`)
@@ -199,6 +214,14 @@ export async function setPaymentStatusAction(formData: FormData) {
     redirectWithError(storeSlug, "결제 상태 변경 대상 주문을 찾지 못했습니다.")
   }
 
+  const appliedPaymentStatus = data[0]?.payment_status
+  if (appliedPaymentStatus !== paymentStatus) {
+    redirectWithError(
+      storeSlug,
+      `결제 상태 저장 불일치: 요청=${paymentStatus}, 실제=${appliedPaymentStatus ?? "unknown"}`
+    )
+  }
+
   await writeAdminActionLog({
     storeSlug,
     orderId,
@@ -209,6 +232,7 @@ export async function setPaymentStatusAction(formData: FormData) {
     },
   })
 
-  revalidatePath("/admin/orders")
+  revalidatePath("/admin/orders", "page")
+  revalidatePath("/track", "page")
   redirectWithSuccess(storeSlug, "결제 상태를 변경했습니다.")
 }
