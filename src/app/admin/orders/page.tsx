@@ -29,6 +29,48 @@ function formatDate(value: string) {
   return dateFormatter.format(new Date(value))
 }
 
+function getOrderPriorityMeta(
+  order: Awaited<ReturnType<typeof getAdminOrdersByStoreId>>[number]
+) {
+  if (order.status === "pending" && order.price_status === "needs_review") {
+    return {
+      containerClass: "border-amber-300 bg-amber-50/40",
+      label: "긴급: 가격 확정 필요",
+      labelClass: "bg-amber-100 text-amber-800",
+    }
+  }
+
+  if (order.payment_status === "transfer_submitted") {
+    return {
+      containerClass: "border-sky-300 bg-sky-50/40",
+      label: "긴급: 입금 신고 확인 필요",
+      labelClass: "bg-sky-100 text-sky-800",
+    }
+  }
+
+  if (order.status === "delivering") {
+    return {
+      containerClass: "border-emerald-300 bg-emerald-50/30",
+      label: "진행중: 배달중",
+      labelClass: "bg-emerald-100 text-emerald-800",
+    }
+  }
+
+  if (order.status === "canceled") {
+    return {
+      containerClass: "border-zinc-300 bg-zinc-50/70",
+      label: "종료: 취소 주문",
+      labelClass: "bg-zinc-200 text-zinc-700",
+    }
+  }
+
+  return {
+    containerClass: "border-brand-border",
+    label: null,
+    labelClass: "",
+  }
+}
+
 export default async function AdminOrdersPage(props: PageProps<"/admin/orders">) {
   const searchParams = await props.searchParams
   const queryString = new URLSearchParams()
@@ -330,6 +372,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
           const defaultSubtotal = order.subtotal_amount ?? knownLineTotal
           const defaultDeliveryFee = order.delivery_fee ?? selectedStore.delivery_fee
           const isPaymentConfirmed = order.payment_status === "confirmed"
+          const priorityMeta = getOrderPriorityMeta(order)
           const orderSummaryText = [
             `주문번호: ${order.order_code}`,
             `고객: ${order.customer_name} / ${formatPhone(order.customer_phone)}`,
@@ -357,13 +400,18 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
             .join("\n")
 
           return (
-            <article key={order.id} className="mq-card p-4">
+            <article key={order.id} className={`mq-card border p-4 ${priorityMeta.containerClass}`}>
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="text-sm font-semibold text-zinc-900">#{order.order_code}</p>
                   <p className="text-xs text-zinc-500">접수: {formatDate(order.created_at)}</p>
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
+                  {priorityMeta.label ? (
+                    <span className={`rounded-full px-2 py-1 font-semibold ${priorityMeta.labelClass}`}>
+                      {priorityMeta.label}
+                    </span>
+                  ) : null}
                   <span className="rounded-full bg-brand-soft px-2 py-1 text-brand-strong">
                     주문 {orderStatusLabel(order.status)}
                   </span>
