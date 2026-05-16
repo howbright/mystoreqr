@@ -1,9 +1,9 @@
 "use client"
 
 import Link from "next/link"
-import { useMemo, useState } from "react"
+import { useMemo, useState, useSyncExternalStore } from "react"
 
-import { formatKrw, formatPhone } from "@/lib/mystoreqr/format"
+import { formatCustomerOrderCode, formatKrw, formatPhone } from "@/lib/mystoreqr/format"
 import type { PublicStoreBundle } from "@/lib/mystoreqr/public-queries"
 
 type StorefrontProps = {
@@ -24,6 +24,47 @@ type OrderSubmitResult = {
   trackingPath: string
 }
 
+type RecentOrder = OrderSubmitResult & {
+  customerPhone: string
+  savedAt: number
+}
+
+function getRecentOrderStorageKey(storeSlug: string) {
+  return `mystoreqr:recent-order:${storeSlug}`
+}
+
+function subscribeToRecentOrderChange(onStoreChange: () => void) {
+  window.addEventListener("storage", onStoreChange)
+  window.addEventListener("mystoreqr-recent-order", onStoreChange)
+
+  return () => {
+    window.removeEventListener("storage", onStoreChange)
+    window.removeEventListener("mystoreqr-recent-order", onStoreChange)
+  }
+}
+
+function parseRecentOrder(value: string | null): RecentOrder | null {
+  if (!value) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(value) as Partial<RecentOrder>
+    if (parsed.orderCode && parsed.trackingPath && parsed.customerPhone && parsed.savedAt) {
+      return {
+        orderCode: parsed.orderCode,
+        trackingPath: parsed.trackingPath,
+        customerPhone: parsed.customerPhone,
+        savedAt: parsed.savedAt,
+      }
+    }
+  } catch {
+    return null
+  }
+
+  return null
+}
+
 export function Storefront({ storeBundle }: StorefrontProps) {
   const { store, categories, products } = storeBundle
   const [loadedAt] = useState(() => Date.now())
@@ -39,6 +80,13 @@ export function Storefront({ storeBundle }: StorefrontProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [submitResult, setSubmitResult] = useState<OrderSubmitResult | null>(null)
+  const recentOrderStorageKey = getRecentOrderStorageKey(store.slug)
+  const recentOrderSnapshot = useSyncExternalStore(
+    subscribeToRecentOrderChange,
+    () => window.localStorage.getItem(recentOrderStorageKey),
+    () => null
+  )
+  const recentOrder = useMemo(() => parseRecentOrder(recentOrderSnapshot), [recentOrderSnapshot])
 
   const categoriesWithProducts = useMemo(() => {
     const group = categories.map((category) => ({
@@ -151,6 +199,18 @@ export function Storefront({ storeBundle }: StorefrontProps) {
         orderCode: payload.orderCode,
         trackingPath: payload.trackingPath,
       })
+      const nextRecentOrder = {
+        orderCode: payload.orderCode,
+        trackingPath: payload.trackingPath,
+        customerPhone: customerForm.customerPhone,
+        savedAt: Date.now(),
+      }
+      try {
+        window.localStorage.setItem(recentOrderStorageKey, JSON.stringify(nextRecentOrder))
+        window.dispatchEvent(new Event("mystoreqr-recent-order"))
+      } catch {
+        // 주문은 이미 접수되었으므로 최근 주문 저장 실패는 사용자 플로우를 막지 않습니다.
+      }
       setQuantities({})
     } catch {
       setErrorMessage("네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
@@ -172,6 +232,14 @@ export function Storefront({ storeBundle }: StorefrontProps) {
           </span>
           <span className="mq-chip">기본배달비 {formatKrw(store.delivery_fee)}</span>
         </div>
+        {recentOrder ? (
+          <Link
+            href={recentOrder.trackingPath}
+            className="mt-4 inline-flex rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-strong"
+          >
+            최근 주문 추적하기 #{formatCustomerOrderCode(recentOrder.orderCode)}
+          </Link>
+        ) : null}
       </header>
 
       <section className="grid gap-4 lg:grid-cols-[2fr_1fr]">
@@ -416,7 +484,7 @@ export function Storefront({ storeBundle }: StorefrontProps) {
               {submitResult ? (
                 <div className="rounded-lg bg-emerald-50 px-3 py-3 text-sm text-emerald-700">
                   <p className="font-semibold">주문이 접수되었습니다.</p>
-                  <p className="mt-1">주문번호: {submitResult.orderCode}</p>
+                  <p className="mt-1">주문번호: {formatCustomerOrderCode(submitResult.orderCode)}</p>
                   <Link href={submitResult.trackingPath} className="mt-2 inline-block text-brand-strong underline">
                     주문 추적 바로가기
                   </Link>

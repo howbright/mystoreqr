@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 
-import { formatKrw } from "@/lib/mystoreqr/format"
+import { formatCustomerOrderCode, formatKrw, normalizeCustomerOrderCode } from "@/lib/mystoreqr/format"
 import { orderStatusLabel, paymentStatusLabel, priceStatusLabel } from "@/lib/mystoreqr/status"
 import type { Database } from "@/types/database.type"
 
@@ -21,6 +21,7 @@ type BankInfo = {
 
 type TrackClientProps = {
   initialLookupToken: string
+  initialOrderCode: string
   initialPhone: string
   initialStoreSlug: string
   initialOrder: TrackingOrder | null
@@ -104,13 +105,15 @@ function formatDate(value: string) {
 
 export function TrackClient({
   initialLookupToken,
+  initialOrderCode,
   initialPhone,
   initialStoreSlug,
   initialOrder,
   initialItems,
   initialBankInfo,
 }: TrackClientProps) {
-  const [lookupToken, setLookupToken] = useState(initialLookupToken)
+  const [lookupToken] = useState(initialLookupToken)
+  const [orderCode, setOrderCode] = useState(formatCustomerOrderCode(initialOrderCode))
   const [customerPhone, setCustomerPhone] = useState(initialPhone)
   const [storeSlug, setStoreSlug] = useState(initialStoreSlug)
   const [isLoading, setIsLoading] = useState(false)
@@ -142,7 +145,8 @@ export function TrackClient({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          lookupToken,
+          lookupToken: orderCode.trim() ? "" : lookupToken,
+          orderCode,
           customerPhone,
           storeSlug,
         }),
@@ -186,14 +190,14 @@ export function TrackClient({
         setIsLoading(false)
       }
     }
-  }, [lookupToken, customerPhone, storeSlug])
+  }, [lookupToken, orderCode, customerPhone, storeSlug])
 
   useEffect(() => {
     if (!autoRefreshEnabled) {
       return
     }
 
-    if (!lookupToken.trim() || !customerPhone.trim()) {
+    if ((!lookupToken.trim() && !orderCode.trim()) || !customerPhone.trim()) {
       return
     }
 
@@ -202,7 +206,7 @@ export function TrackClient({
     }, refreshIntervalSeconds * 1000)
 
     return () => window.clearInterval(timer)
-  }, [autoRefreshEnabled, refreshIntervalSeconds, lookupToken, customerPhone, fetchTracking])
+  }, [autoRefreshEnabled, refreshIntervalSeconds, lookupToken, orderCode, customerPhone, fetchTracking])
 
   async function copyCurrentTrackingUrl() {
     try {
@@ -220,19 +224,19 @@ export function TrackClient({
         <p className="text-sm font-medium text-brand-strong">MyStoreQR</p>
         <h1 className="mt-1 text-2xl font-bold text-zinc-900">주문 추적</h1>
         <p className="mt-2 text-sm text-zinc-600">
-          주문 접수 후 받은 토큰과 연락처를 입력하면 현재 상태를 확인할 수 있습니다.
+          주문번호와 연락처를 입력하면 현재 상태를 확인할 수 있습니다.
         </p>
       </header>
 
       <section className="mq-card p-5">
         <div className="grid gap-3">
           <label className="grid gap-1 text-sm">
-            <span className="font-medium text-zinc-700">주문 조회 토큰</span>
+            <span className="font-medium text-zinc-700">주문번호</span>
             <input
-              value={lookupToken}
-              onChange={(event) => setLookupToken(event.target.value)}
+              value={orderCode}
+              onChange={(event) => setOrderCode(normalizeCustomerOrderCode(event.target.value))}
               className="mq-input"
-              placeholder="예: 3f6f5f63-..."
+              placeholder="예: 0001"
             />
           </label>
 
@@ -385,7 +389,7 @@ export function TrackClient({
           <div className="grid gap-2 text-sm text-zinc-700">
             <p className="flex justify-between gap-2">
               <span>주문번호</span>
-              <strong>{order.order_code}</strong>
+              <strong>{formatCustomerOrderCode(order.order_code)}</strong>
             </p>
             <p className="flex justify-between gap-2">
               <span>상품 합계</span>

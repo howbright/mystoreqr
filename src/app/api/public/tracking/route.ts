@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server"
 
 import {
+  getOrderTrackingByOrderCode,
   getOrderTrackingByToken,
+  getOrderTrackingItemsByOrderCode,
   getOrderTrackingItemsByToken,
   getPublicStoreBySlug,
 } from "@/lib/mystoreqr/public-queries"
 
 type TrackingBody = {
-  lookupToken: string
+  lookupToken?: string
+  orderCode?: string
   customerPhone: string
   storeSlug?: string
 }
@@ -22,7 +25,10 @@ function isValidTrackingPayload(body: unknown): body is TrackingBody {
   }
 
   const value = body as Record<string, unknown>
-  return typeof value.lookupToken === "string" && typeof value.customerPhone === "string"
+  return (
+    typeof value.customerPhone === "string" &&
+    (typeof value.lookupToken === "string" || typeof value.orderCode === "string")
+  )
 }
 
 export async function POST(request: Request) {
@@ -34,19 +40,35 @@ export async function POST(request: Request) {
   }
 
   if (!isValidTrackingPayload(payload)) {
-    return errorResponse("lookupToken, customerPhone 값이 필요합니다.")
+    return errorResponse("주문번호와 연락처 값이 필요합니다.")
   }
-
-  const tracking = await getOrderTrackingByToken(payload.lookupToken, payload.customerPhone)
-  if (!tracking) {
-    return errorResponse("주문을 찾을 수 없습니다. 토큰/연락처를 다시 확인해 주세요.", 404)
-  }
-  const trackingItems = await getOrderTrackingItemsByToken(payload.lookupToken, payload.customerPhone)
 
   const storeSlug =
     typeof payload.storeSlug === "string" && payload.storeSlug.trim().length > 0
       ? payload.storeSlug.trim().toLowerCase()
       : null
+  const lookupToken =
+    typeof payload.lookupToken === "string" && payload.lookupToken.trim().length > 0
+      ? payload.lookupToken
+      : null
+  const orderCode =
+    typeof payload.orderCode === "string" && payload.orderCode.trim().length > 0
+      ? payload.orderCode
+      : null
+
+  const tracking = orderCode
+    ? await getOrderTrackingByOrderCode(orderCode, payload.customerPhone, storeSlug ?? undefined)
+    : lookupToken
+      ? await getOrderTrackingByToken(lookupToken, payload.customerPhone)
+      : null
+  if (!tracking) {
+    return errorResponse("주문을 찾을 수 없습니다. 주문번호/연락처를 다시 확인해 주세요.", 404)
+  }
+  const trackingItems = orderCode
+    ? await getOrderTrackingItemsByOrderCode(orderCode, payload.customerPhone, storeSlug ?? undefined)
+    : lookupToken
+      ? await getOrderTrackingItemsByToken(lookupToken, payload.customerPhone)
+      : []
 
   let bankInfo: {
     name: string

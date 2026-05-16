@@ -1,5 +1,7 @@
 import {
+  getOrderTrackingByOrderCode,
   getOrderTrackingByToken,
+  getOrderTrackingItemsByOrderCode,
   getOrderTrackingItemsByToken,
   getPublicStoreBySlug,
 } from "@/lib/mystoreqr/public-queries"
@@ -17,15 +19,20 @@ function firstString(value: string | string[] | undefined) {
 export default async function TrackPage(props: PageProps<"/track">) {
   const searchParams = await props.searchParams
   const initialLookupToken = firstString(searchParams.token) ?? ""
+  const initialOrderCode = firstString(searchParams.order) ?? ""
   const initialPhone = firstString(searchParams.phone) ?? ""
   const initialStoreSlug = firstString(searchParams.store)?.trim().toLowerCase() ?? ""
   const initialOrder =
     initialLookupToken && initialPhone
       ? await getOrderTrackingByToken(initialLookupToken, initialPhone)
+      : initialOrderCode && initialPhone
+        ? await getOrderTrackingByOrderCode(initialOrderCode, initialPhone, initialStoreSlug)
       : null
   const initialItems =
     initialLookupToken && initialPhone
       ? await getOrderTrackingItemsByToken(initialLookupToken, initialPhone)
+      : initialOrderCode && initialPhone
+        ? await getOrderTrackingItemsByOrderCode(initialOrderCode, initialPhone, initialStoreSlug)
       : []
 
   const storeBundle = initialStoreSlug ? await getPublicStoreBySlug(initialStoreSlug) : null
@@ -42,6 +49,7 @@ export default async function TrackPage(props: PageProps<"/track">) {
   return (
     <TrackClient
       initialLookupToken={initialLookupToken}
+      initialOrderCode={initialOrderCode}
       initialPhone={initialPhone}
       initialStoreSlug={initialStoreSlug}
       initialOrder={initialOrder}
