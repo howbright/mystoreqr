@@ -5,10 +5,14 @@ import { useState } from "react"
 type OrderToolsProps = {
   orderCode: string
   summaryText: string
+  trackingUrl: string
+  customerGuideText: string
 }
 
-export function OrderTools({ orderCode, summaryText }: OrderToolsProps) {
+export function OrderTools({ orderCode, summaryText, trackingUrl, customerGuideText }: OrderToolsProps) {
   const [copied, setCopied] = useState(false)
+  const [trackingCopied, setTrackingCopied] = useState(false)
+  const [guideCopied, setGuideCopied] = useState(false)
 
   async function handleCopy() {
     try {
@@ -17,6 +21,26 @@ export function OrderTools({ orderCode, summaryText }: OrderToolsProps) {
       setTimeout(() => setCopied(false), 1200)
     } catch {
       setCopied(false)
+    }
+  }
+
+  async function handleCopyTrackingUrl() {
+    try {
+      await navigator.clipboard.writeText(trackingUrl)
+      setTrackingCopied(true)
+      setTimeout(() => setTrackingCopied(false), 1200)
+    } catch {
+      setTrackingCopied(false)
+    }
+  }
+
+  async function handleCopyCustomerGuide() {
+    try {
+      await navigator.clipboard.writeText(customerGuideText)
+      setGuideCopied(true)
+      setTimeout(() => setGuideCopied(false), 1200)
+    } catch {
+      setGuideCopied(false)
     }
   }
 
@@ -55,6 +79,20 @@ export function OrderTools({ orderCode, summaryText }: OrderToolsProps) {
         className="rounded-lg bg-brand-soft px-2 py-1 text-xs font-medium text-brand-strong hover:bg-brand-border"
       >
         {copied ? "복사됨" : "주문문구 복사"}
+      </button>
+      <button
+        type="button"
+        onClick={handleCopyTrackingUrl}
+        className="rounded-lg bg-brand-soft px-2 py-1 text-xs font-medium text-brand-strong hover:bg-brand-border"
+      >
+        {trackingCopied ? "복사됨" : "추적링크 복사"}
+      </button>
+      <button
+        type="button"
+        onClick={handleCopyCustomerGuide}
+        className="rounded-lg bg-brand-soft px-2 py-1 text-xs font-medium text-brand-strong hover:bg-brand-border"
+      >
+        {guideCopied ? "복사됨" : "고객안내문 복사"}
       </button>
       <button
         type="button"

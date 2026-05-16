@@ -29,6 +29,15 @@ function formatDate(value: string) {
   return dateFormatter.format(new Date(value))
 }
 
+function getAppBaseUrl() {
+  const envBaseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim()
+  if (envBaseUrl) {
+    return envBaseUrl.replace(/\/$/, "")
+  }
+
+  return "http://localhost:3000"
+}
+
 function getOrderPriorityMeta(
   order: Awaited<ReturnType<typeof getAdminOrdersByStoreId>>[number]
 ) {
@@ -182,6 +191,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
   }
   const resetFiltersHref = `/admin/orders?store=${encodeURIComponent(selectedStore.slug)}`
   const actionReturnTo = buildOrdersHref(selectedStore.slug)
+  const appBaseUrl = getAppBaseUrl()
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-6 md:px-8">
@@ -373,6 +383,16 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
           const defaultDeliveryFee = order.delivery_fee ?? selectedStore.delivery_fee
           const isPaymentConfirmed = order.payment_status === "confirmed"
           const priorityMeta = getOrderPriorityMeta(order)
+          const trackingPath = `/track?token=${encodeURIComponent(order.lookup_token)}&phone=${encodeURIComponent(order.customer_phone)}&store=${encodeURIComponent(selectedStore.slug)}`
+          const trackingUrl = `${appBaseUrl}${trackingPath}`
+          const customerGuideText = [
+            `${order.customer_name}님, ${selectedStore.name}입니다.`,
+            `주문번호: ${order.order_code}`,
+            `확정 금액: ${formatKrw(order.total_amount)}`,
+            `입금 계좌: ${selectedStore.bank_name} ${selectedStore.bank_account_number} (예금주 ${selectedStore.bank_account_holder})`,
+            `주문 조회: ${trackingUrl}`,
+            "감사합니다.",
+          ].join("\n")
           const orderSummaryText = [
             `주문번호: ${order.order_code}`,
             `고객: ${order.customer_name} / ${formatPhone(order.customer_phone)}`,
@@ -424,7 +444,12 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                 </div>
               </div>
               <div className="mt-2">
-                <OrderTools orderCode={order.order_code} summaryText={orderSummaryText} />
+                <OrderTools
+                  orderCode={order.order_code}
+                  summaryText={orderSummaryText}
+                  trackingUrl={trackingUrl}
+                  customerGuideText={customerGuideText}
+                />
               </div>
 
               <div className="mt-3 grid gap-1 text-sm text-zinc-700">

@@ -11,7 +11,17 @@ type ProductRow = Tables<"products">
 type CategoryRow = Tables<"categories">
 type OrderStatusEventRow = Tables<"order_status_events">
 
-export type AdminStore = Pick<StoreRow, "id" | "slug" | "name" | "delivery_fee" | "phone">
+export type AdminStore = Pick<
+  StoreRow,
+  | "id"
+  | "slug"
+  | "name"
+  | "delivery_fee"
+  | "phone"
+  | "bank_name"
+  | "bank_account_number"
+  | "bank_account_holder"
+>
 
 export type AdminOrderItem = Pick<OrderItemRow, "id" | "product_name" | "quantity" | "unit_price" | "line_total">
 
@@ -24,6 +34,7 @@ export type AdminOrder = Pick<
   OrderRow,
   | "id"
   | "order_code"
+  | "lookup_token"
   | "customer_name"
   | "customer_phone"
   | "fulfillment_type"
@@ -88,7 +99,7 @@ export async function getAdminStores(): Promise<AdminStore[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("stores")
-    .select("id, slug, name, delivery_fee, phone")
+    .select("id, slug, name, delivery_fee, phone, bank_name, bank_account_number, bank_account_holder")
     .order("created_at", { ascending: true })
 
   if (error) {
@@ -106,6 +117,7 @@ export async function getAdminOrdersByStoreId(storeId: string, limit = 100): Pro
       [
         "id",
         "order_code",
+        "lookup_token",
         "customer_name",
         "customer_phone",
         "fulfillment_type",
