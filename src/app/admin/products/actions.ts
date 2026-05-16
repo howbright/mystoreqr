@@ -8,6 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import type { TablesInsert, TablesUpdate } from "@/types/database.type"
 
 type CsvProductRow = {
+  id: string | null
   name: string
   category: string
   price: number | null
@@ -16,6 +17,10 @@ type CsvProductRow = {
   isSoldOut: boolean
   isActive: boolean
   displayOrder: number
+}
+
+function isUuidLike(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
 }
 
 function toSafeString(value: FormDataEntryValue | null) {
@@ -108,6 +113,7 @@ function parseProductsCsv(csvText: string): CsvProductRow[] {
   const getIndex = (name: string) => headers.indexOf(name)
 
   const nameIndex = getIndex("name")
+  const idIndex = getIndex("id")
   const categoryIndex = getIndex("category")
   const priceIndex = getIndex("price")
   const unitIndex = getIndex("unit")
@@ -128,6 +134,12 @@ function parseProductsCsv(csvText: string): CsvProductRow[] {
       continue
     }
 
+    const idRaw = idIndex >= 0 ? (cols[idIndex] ?? "").trim() : ""
+    const id = idRaw ? idRaw : null
+    if (id && !isUuidLike(id)) {
+      throw new Error(`상품 "${name}"의 id 값이 올바른 UUID 형식이 아닙니다.`)
+    }
+
     const category = (categoryIndex >= 0 ? cols[categoryIndex] : "기타")?.trim() || "기타"
     const priceRaw = priceIndex >= 0 ? (cols[priceIndex] ?? "").trim() : ""
     const price = parseNonNegativeIntOrNull(priceRaw)
@@ -139,6 +151,7 @@ function parseProductsCsv(csvText: string): CsvProductRow[] {
     const displayOrder = parseNonNegativeIntOrNull(displayOrderRaw) ?? 0
 
     rows.push({
+      id,
       name,
       category,
       price,
@@ -221,6 +234,7 @@ export async function importProductsCsvAction(formData: FormData) {
 
   const categoryMap = new Map((categories ?? []).map((category) => [category.name.trim(), category.id]))
   const productMap = new Map((products ?? []).map((product) => [product.name.trim(), product.id]))
+  const productIdMap = new Map((products ?? []).map((product) => [product.id, product.id]))
 
   let createdCount = 0
   let updatedCount = 0
@@ -248,7 +262,7 @@ export async function importProductsCsvAction(formData: FormData) {
       categoryMap.set(insertedCategory.name.trim(), insertedCategory.id)
     }
 
-    const existingProductId = productMap.get(row.name)
+    const existingProductId = (row.id ? productIdMap.get(row.id) : null) ?? productMap.get(row.name)
     const payload: TablesUpdate<"products"> = {
       category_id: categoryId,
       name: row.name,

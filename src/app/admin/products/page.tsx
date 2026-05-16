@@ -23,10 +23,10 @@ function firstString(value: string | string[] | undefined) {
   return value
 }
 
-const SAMPLE_CSV = `name,category,price,unit,description,is_sold_out,is_active,display_order
-상추,채소/과일,3000,봉,신선한 상추,false,true,1
-토마토,채소/과일,,kg,시세 상품,true,true,2
-우유 1L,유제품,2800,개,,false,true,1`
+const SAMPLE_CSV = `id,name,category,price,unit,description,is_sold_out,is_active,display_order
+,상추,채소/과일,3000,봉,신선한 상추,false,true,1
+,토마토,채소/과일,,kg,시세 상품,true,true,2
+,우유 1L,유제품,2800,개,,false,true,1`
 
 export default async function AdminProductsPage(props: PageProps<"/admin/products">) {
   const searchParams = await props.searchParams
@@ -132,6 +132,15 @@ export default async function AdminProductsPage(props: PageProps<"/admin/product
         <p className="mt-1 text-sm text-zinc-600">
           CSV 파일을 업로드하거나 텍스트를 붙여넣으면 이름 기준으로 기존 상품은 수정, 신규는 생성합니다.
         </p>
+        <p className="mt-1 text-xs text-zinc-500">
+          추천 방식: CSV 다운로드 → 엑셀에서 `price`, `is_active(true/false)` 수정 → 다시 업로드
+        </p>
+        <a
+          href={`/api/admin/products/export?store=${encodeURIComponent(selectedStore.slug)}`}
+          className="mt-2 inline-flex h-10 items-center rounded-lg bg-zinc-100 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-200"
+        >
+          현재 상품 CSV 다운로드
+        </a>
 
         <form action={importProductsCsvAction} className="mt-3 grid gap-3">
           <input type="hidden" name="storeSlug" value={selectedStore.slug} />
