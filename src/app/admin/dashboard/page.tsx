@@ -28,6 +28,17 @@ const dateTimeFormatter = new Intl.DateTimeFormat("ko-KR", {
   timeStyle: "short",
 })
 
+function buildOrdersHref(storeSlug: string, filters: Record<string, string>) {
+  const params = new URLSearchParams({ store: storeSlug })
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) {
+      params.set(key, value)
+    }
+  }
+
+  return `/admin/orders?${params.toString()}`
+}
+
 export default async function AdminDashboardPage(props: PageProps<"/admin/dashboard">) {
   const searchParams = await props.searchParams
   const queryString = new URLSearchParams()
@@ -58,6 +69,15 @@ export default async function AdminDashboardPage(props: PageProps<"/admin/dashbo
     getAdminDashboardMetricsByStoreId(selectedStore.id, 7),
     getRecentOrderStatusEventsByStoreId(selectedStore.id, 30),
   ])
+  const ordersLinks = {
+    all: buildOrdersHref(selectedStore.slug, {}),
+    needsReview: buildOrdersHref(selectedStore.slug, { price: "needs_review" }),
+    waitingTransfer: buildOrdersHref(selectedStore.slug, { payment: "waiting_transfer" }),
+    transferSubmitted: buildOrdersHref(selectedStore.slug, { payment: "transfer_submitted" }),
+    delivering: buildOrdersHref(selectedStore.slug, { status: "delivering" }),
+    completed: buildOrdersHref(selectedStore.slug, { status: "completed" }),
+    canceled: buildOrdersHref(selectedStore.slug, { status: "canceled" }),
+  }
 
   const maxDailyCount = Math.max(...metrics.dailyOrders.map((day) => day.count), 1)
 
@@ -74,7 +94,7 @@ export default async function AdminDashboardPage(props: PageProps<"/admin/dashbo
           </div>
           <div className="flex items-center gap-2">
             <Link
-              href={`/admin/orders?store=${encodeURIComponent(selectedStore.slug)}`}
+              href={ordersLinks.all}
               className="rounded-lg bg-brand-soft px-3 py-2 text-sm font-medium text-brand-strong hover:bg-brand-border"
             >
               주문 보드
@@ -120,24 +140,24 @@ export default async function AdminDashboardPage(props: PageProps<"/admin/dashbo
       </nav>
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <article className="mq-card p-4">
+        <Link href={ordersLinks.all} className="mq-card block p-4 hover:bg-zinc-50">
           <p className="text-xs text-zinc-500">총 주문</p>
           <p className="mt-1 text-2xl font-bold text-zinc-900">{metrics.totalOrders}</p>
-        </article>
-        <article className="mq-card p-4">
+        </Link>
+        <Link href={ordersLinks.needsReview} className="mq-card block p-4 hover:bg-zinc-50">
           <p className="text-xs text-zinc-500">가격 확정률</p>
           <p className="mt-1 text-2xl font-bold text-zinc-900">
             {metrics.totalOrders > 0 ? Math.round((metrics.quotedOrders / metrics.totalOrders) * 100) : 0}%
           </p>
-        </article>
-        <article className="mq-card p-4">
+        </Link>
+        <Link href={ordersLinks.completed} className="mq-card block p-4 hover:bg-zinc-50">
           <p className="text-xs text-zinc-500">완료 주문</p>
           <p className="mt-1 text-2xl font-bold text-zinc-900">{metrics.completedOrders}</p>
-        </article>
-        <article className="mq-card p-4">
+        </Link>
+        <Link href={ordersLinks.all} className="mq-card block p-4 hover:bg-zinc-50">
           <p className="text-xs text-zinc-500">총 매출(주문금액 기준)</p>
           <p className="mt-1 text-2xl font-bold text-zinc-900">{formatKrw(metrics.totalRevenue)}</p>
-        </article>
+        </Link>
       </section>
 
       <section className="mq-card p-4">
@@ -161,13 +181,24 @@ export default async function AdminDashboardPage(props: PageProps<"/admin/dashbo
       <section className="grid gap-3 lg:grid-cols-2">
         <article className="mq-card p-4">
           <h2 className="text-lg font-semibold text-zinc-900">상태 요약</h2>
-          <ul className="mt-3 space-y-2 text-sm text-zinc-700">
-            <li>가격 확정 완료: {metrics.quotedOrders}건</li>
-            <li>입금 대기: {metrics.waitingTransferOrders}건</li>
-            <li>입금 확인: {metrics.confirmedPayments}건</li>
-            <li>취소: {metrics.canceledOrders}건</li>
-            <li>평균 주문금액: {formatKrw(metrics.averageOrderAmount)}</li>
-          </ul>
+          <div className="mt-3 grid gap-2 text-sm">
+            <Link href={ordersLinks.needsReview} className="rounded-lg bg-brand-soft px-3 py-2 text-brand-strong hover:bg-brand-border">
+              가격 확정 필요 주문 보기
+            </Link>
+            <Link href={ordersLinks.waitingTransfer} className="rounded-lg bg-brand-soft px-3 py-2 text-brand-strong hover:bg-brand-border">
+              입금 대기 주문 보기 ({metrics.waitingTransferOrders}건)
+            </Link>
+            <Link href={ordersLinks.transferSubmitted} className="rounded-lg bg-brand-soft px-3 py-2 text-brand-strong hover:bg-brand-border">
+              입금 신고된 주문 보기
+            </Link>
+            <Link href={ordersLinks.delivering} className="rounded-lg bg-brand-soft px-3 py-2 text-brand-strong hover:bg-brand-border">
+              배달중 주문 보기
+            </Link>
+            <Link href={ordersLinks.canceled} className="rounded-lg bg-zinc-100 px-3 py-2 text-zinc-700 hover:bg-zinc-200">
+              취소 주문 보기 ({metrics.canceledOrders}건)
+            </Link>
+            <p className="mt-1 text-xs text-zinc-500">평균 주문금액: {formatKrw(metrics.averageOrderAmount)}</p>
+          </div>
         </article>
         <article className="mq-card p-4">
           <h2 className="text-lg font-semibold text-zinc-900">최근 주문 상태 이벤트</h2>
