@@ -2,6 +2,7 @@ import Link from "next/link"
 
 import { logoutAdminAction } from "@/app/admin/_actions/auth"
 import { requireAdminSessionOrRedirect } from "@/lib/mystoreqr/admin-auth"
+import { ORDER_STATUS_OPTIONS, PAYMENT_STATUS_OPTIONS } from "@/lib/mystoreqr/constants"
 import { getAdminOrdersByStoreId, getAdminStores } from "@/lib/mystoreqr/admin-queries"
 import { formatKrw, formatPhone } from "@/lib/mystoreqr/format"
 import { orderStatusLabel, paymentStatusLabel, priceStatusLabel } from "@/lib/mystoreqr/status"
@@ -13,6 +14,8 @@ const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
   dateStyle: "medium",
   timeStyle: "short",
 })
+
+const PRICE_STATUS_OPTIONS = ["needs_review", "quoted"] as const
 
 function firstString(value: string | string[] | undefined) {
   if (Array.isArray(value)) {
@@ -39,6 +42,10 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
   await requireAdminSessionOrRedirect(nextPath)
 
   const storeSlugParam = firstString(searchParams.store)?.trim().toLowerCase()
+  const statusFilterRaw = firstString(searchParams.status)?.trim()
+  const paymentFilterRaw = firstString(searchParams.payment)?.trim()
+  const priceFilterRaw = firstString(searchParams.price)?.trim()
+  const keywordFilter = firstString(searchParams.q)?.trim() ?? ""
   const successMessage = firstString(searchParams.ok)
   const errorMessage = firstString(searchParams.error)
 
@@ -65,6 +72,50 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
     stores[0]
 
   const orders = await getAdminOrdersByStoreId(selectedStore.id, 150)
+  const statusFilter = ORDER_STATUS_OPTIONS.includes(statusFilterRaw as (typeof ORDER_STATUS_OPTIONS)[number])
+    ? statusFilterRaw
+    : "all"
+  const paymentFilter = PAYMENT_STATUS_OPTIONS.includes(
+    paymentFilterRaw as (typeof PAYMENT_STATUS_OPTIONS)[number]
+  )
+    ? paymentFilterRaw
+    : "all"
+  const priceFilter = PRICE_STATUS_OPTIONS.includes(
+    priceFilterRaw as (typeof PRICE_STATUS_OPTIONS)[number]
+  )
+    ? priceFilterRaw
+    : "all"
+  const normalizedKeyword = keywordFilter.toLowerCase()
+  const filteredOrders = orders.filter((order) => {
+    if (statusFilter !== "all" && order.status !== statusFilter) {
+      return false
+    }
+
+    if (paymentFilter !== "all" && order.payment_status !== paymentFilter) {
+      return false
+    }
+
+    if (priceFilter !== "all" && order.price_status !== priceFilter) {
+      return false
+    }
+
+    if (!normalizedKeyword) {
+      return true
+    }
+
+    const searchable = [
+      order.order_code,
+      order.customer_name,
+      order.customer_phone,
+      order.delivery_address ?? "",
+      order.delivery_address_detail ?? "",
+      order.customer_note ?? "",
+    ]
+      .join(" ")
+      .toLowerCase()
+
+    return searchable.includes(normalizedKeyword)
+  })
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-6 md:px-8">
@@ -132,22 +183,84 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{errorMessage}</p>
       ) : null}
 
+      <section className="mq-card p-4">
+        <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <input type="hidden" name="store" value={selectedStore.slug} />
+          <label className="grid gap-1 text-xs text-zinc-600">
+            주문 상태
+            <select
+              name="status"
+              defaultValue={statusFilter}
+              className="h-10 rounded-md border border-zinc-300 px-2 text-sm focus:border-brand focus:outline-none"
+            >
+              <option value="all">전체</option>
+              {ORDER_STATUS_OPTIONS.map((status) => (
+                <option key={status} value={status}>
+                  {orderStatusLabel(status)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1 text-xs text-zinc-600">
+            결제 상태
+            <select
+              name="payment"
+              defaultValue={paymentFilter}
+              className="h-10 rounded-md border border-zinc-300 px-2 text-sm focus:border-brand focus:outline-none"
+            >
+              <option value="all">전체</option>
+              {PAYMENT_STATUS_OPTIONS.map((status) => (
+                <option key={status} value={status}>
+                  {paymentStatusLabel(status)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1 text-xs text-zinc-600">
+            가격 상태
+            <select
+              name="price"
+              defaultValue={priceFilter}
+              className="h-10 rounded-md border border-zinc-300 px-2 text-sm focus:border-brand focus:outline-none"
+            >
+              <option value="all">전체</option>
+              <option value="needs_review">{priceStatusLabel("needs_review")}</option>
+              <option value="quoted">{priceStatusLabel("quoted")}</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-xs text-zinc-600 xl:col-span-2">
+            검색 (주문번호/고객명/연락처/주소)
+            <div className="flex gap-2">
+              <input
+                name="q"
+                defaultValue={keywordFilter}
+                className="h-10 w-full rounded-md border border-zinc-300 px-3 text-sm focus:border-brand focus:outline-none"
+                placeholder="예: 0101234, 홍길동, 240511..."
+              />
+              <button type="submit" className="mq-btn-primary h-10 min-w-24 rounded-md">
+                필터 적용
+              </button>
+            </div>
+          </label>
+        </form>
+      </section>
+
       <section className="grid gap-3 md:grid-cols-3">
         <div className="mq-card rounded-xl p-4">
-          <p className="text-xs text-zinc-500">전체 주문</p>
-          <p className="mt-1 text-2xl font-bold text-zinc-900">{orders.length}</p>
+          <p className="text-xs text-zinc-500">현재 목록 주문</p>
+          <p className="mt-1 text-2xl font-bold text-zinc-900">{filteredOrders.length}</p>
         </div>
         <div className="mq-card rounded-xl p-4">
           <p className="text-xs text-zinc-500">가격 확정 대기</p>
           <p className="mt-1 text-2xl font-bold text-zinc-900">
-            {orders.filter((order) => order.price_status === "needs_review").length}
+            {filteredOrders.filter((order) => order.price_status === "needs_review").length}
           </p>
         </div>
         <div className="mq-card rounded-xl p-4">
           <p className="text-xs text-zinc-500">입금 확인 필요</p>
           <p className="mt-1 text-2xl font-bold text-zinc-900">
             {
-              orders.filter((order) =>
+              filteredOrders.filter((order) =>
                 order.payment_status === "transfer_submitted" || order.payment_status === "waiting_transfer"
               ).length
             }
@@ -156,7 +269,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
       </section>
 
       <section className="space-y-3">
-        {orders.map((order) => {
+        {filteredOrders.map((order) => {
           const knownLineTotal = order.order_items.reduce((acc, item) => acc + (item.line_total ?? 0), 0)
           const hasUnknownLine = order.order_items.some((item) => item.unit_price == null)
           const defaultSubtotal = order.subtotal_amount ?? knownLineTotal
@@ -388,6 +501,11 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
             </article>
           )
         })}
+        {filteredOrders.length === 0 ? (
+          <article className="mq-card p-5 text-sm text-zinc-600">
+            조건에 맞는 주문이 없습니다.
+          </article>
+        ) : null}
       </section>
     </main>
   )
