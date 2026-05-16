@@ -21,6 +21,36 @@ type PublicOrderIdRow = {
   id: string
   customer_phone: string
 }
+export type PublicTrackingStoreInfo = {
+  name: string
+  roadAddress: string | null
+  jibunAddress: string | null
+  bankName: string
+  bankAccountNumber: string
+  bankAccountHolder: string
+}
+
+type OrderStoreInfoRow = {
+  customer_phone: string
+  stores:
+    | {
+        name: string
+        address_road: string | null
+        address_detail: string | null
+        bank_name: string
+        bank_account_number: string
+        bank_account_holder: string
+      }
+    | {
+        name: string
+        address_road: string | null
+        address_detail: string | null
+        bank_name: string
+        bank_account_number: string
+        bank_account_holder: string
+      }[]
+    | null
+}
 
 function isUuidLike(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
@@ -313,4 +343,101 @@ export async function getOrderTrackingItemsByOrderCode(
   }
 
   return items ?? []
+}
+
+function mapStoreInfo(row: OrderStoreInfoRow | null | undefined): PublicTrackingStoreInfo | null {
+  if (!row?.stores) {
+    return null
+  }
+
+  const store = Array.isArray(row.stores) ? row.stores[0] : row.stores
+  if (!store) {
+    return null
+  }
+
+  return {
+    name: store.name,
+    roadAddress: store.address_road,
+    jibunAddress: store.address_detail,
+    bankName: store.bank_name,
+    bankAccountNumber: store.bank_account_number,
+    bankAccountHolder: store.bank_account_holder,
+  }
+}
+
+export async function getOrderTrackingStoreInfoByToken(
+  lookupToken: string,
+  customerPhone: string
+): Promise<PublicTrackingStoreInfo | null> {
+  const token = lookupToken.trim()
+  const phone = normalizePhone(customerPhone)
+
+  if (!token || !isUuidLike(token) || phone.length < 10) {
+    return null
+  }
+
+  const supabase = createAdminClient()
+  const { data: order, error } = await supabase
+    .from("orders")
+    .select(
+      "customer_phone, stores!inner(name, address_road, address_detail, bank_name, bank_account_number, bank_account_holder)"
+    )
+    .eq("lookup_token", token)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(`주문 매장 조회 실패: ${error.message}`)
+  }
+
+  if (!order || normalizePhone(order.customer_phone) !== phone) {
+    return null
+  }
+
+  return mapStoreInfo(order as OrderStoreInfoRow)
+}
+
+export async function getOrderTrackingStoreInfoByOrderCode(
+  orderCode: string,
+  customerPhone: string,
+  storeSlug?: string
+): Promise<PublicTrackingStoreInfo | null> {
+  const code = normalizeCustomerOrderCode(orderCode)
+  const phone = normalizePhone(customerPhone)
+  const slug = storeSlug?.trim().toLowerCase()
+
+  if (!code || phone.length < 10) {
+    return null
+  }
+
+  const supabase = createAdminClient()
+  const isShortCode = /^\d{4}$/.test(code)
+  let query = supabase
+    .from("orders")
+    .select(
+      "customer_phone, stores!inner(slug, name, address_road, address_detail, bank_name, bank_account_number, bank_account_holder)"
+    )
+    .order("created_at", { ascending: false })
+    .limit(isShortCode ? 50 : 1)
+
+  if (slug) {
+    query = query.eq("stores.slug", slug)
+  }
+
+  if (isShortCode) {
+    query = query.like("order_code", `%-${code}`)
+  } else {
+    query = query.eq("order_code", code)
+  }
+
+  const { data: orders, error } = await query
+
+  if (error) {
+    throw new Error(`주문 매장 조회 실패: ${error.message}`)
+  }
+
+  const order = ((orders ?? []) as OrderStoreInfoRow[]).find(
+    (row) => normalizePhone(row.customer_phone) === phone
+  )
+
+  return mapStoreInfo(order)
 }

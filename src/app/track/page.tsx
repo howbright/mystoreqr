@@ -40,6 +40,8 @@ export default async function TrackPage(props: PageProps<"/track">) {
   const bankInfo = storeBundle
     ? {
         name: storeBundle.store.name,
+        roadAddress: storeBundle.store.address_road,
+        jibunAddress: storeBundle.store.address_detail,
         bankName: storeBundle.store.bank_name,
         bankAccountNumber: storeBundle.store.bank_account_number,
         bankAccountHolder: storeBundle.store.bank_account_holder,

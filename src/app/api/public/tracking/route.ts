@@ -5,6 +5,8 @@ import {
   getOrderTrackingByToken,
   getOrderTrackingItemsByOrderCode,
   getOrderTrackingItemsByToken,
+  getOrderTrackingStoreInfoByOrderCode,
+  getOrderTrackingStoreInfoByToken,
   getPublicStoreBySlug,
 } from "@/lib/mystoreqr/public-queries"
 
@@ -72,6 +74,8 @@ export async function POST(request: Request) {
 
   let bankInfo: {
     name: string
+    roadAddress: string | null
+    jibunAddress: string | null
     bankName: string
     bankAccountNumber: string
     bankAccountHolder: string
@@ -82,11 +86,17 @@ export async function POST(request: Request) {
     if (bundle) {
       bankInfo = {
         name: bundle.store.name,
+        roadAddress: bundle.store.address_road,
+        jibunAddress: bundle.store.address_detail,
         bankName: bundle.store.bank_name,
         bankAccountNumber: bundle.store.bank_account_number,
         bankAccountHolder: bundle.store.bank_account_holder,
       }
     }
+  } else if (orderCode) {
+    bankInfo = await getOrderTrackingStoreInfoByOrderCode(orderCode, payload.customerPhone)
+  } else if (lookupToken) {
+    bankInfo = await getOrderTrackingStoreInfoByToken(lookupToken, payload.customerPhone)
   }
 
   return NextResponse.json({

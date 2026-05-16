@@ -328,6 +328,12 @@ export function Storefront({ storeBundle }: StorefrontProps) {
           </span>
           <span className="mq-chip">기본배달비 {formatKrw(store.delivery_fee)}</span>
         </div>
+        <Link
+          href={`/track?store=${encodeURIComponent(store.slug)}`}
+          className="mt-4 inline-flex rounded-lg border border-brand px-3 py-2 text-sm font-semibold text-brand-strong hover:bg-brand-soft"
+        >
+          주문번호로 조회하기
+        </Link>
         {recentOrders.length > 0 ? (
           <div className="mt-4 grid gap-2">
             <p className="text-xs font-semibold text-zinc-600">최근 주문 추적</p>

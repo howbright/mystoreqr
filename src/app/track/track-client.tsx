@@ -14,6 +14,8 @@ type TrackingItem = Pick<
 
 type BankInfo = {
   name: string
+  roadAddress: string | null
+  jibunAddress: string | null
   bankName: string
   bankAccountNumber: string
   bankAccountHolder: string
@@ -115,7 +117,7 @@ export function TrackClient({
   const [lookupToken] = useState(initialLookupToken)
   const [orderCode, setOrderCode] = useState(formatCustomerOrderCode(initialOrderCode))
   const [customerPhone, setCustomerPhone] = useState(initialPhone)
-  const [storeSlug, setStoreSlug] = useState(initialStoreSlug)
+  const [storeSlug] = useState(initialStoreSlug)
   const [isLoading, setIsLoading] = useState(false)
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false)
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false)
@@ -146,7 +148,7 @@ export function TrackClient({
         },
         body: JSON.stringify({
           lookupToken: orderCode.trim() ? "" : lookupToken,
-          orderCode,
+          orderCode: normalizeCustomerOrderCode(orderCode),
           customerPhone,
           storeSlug,
         }),
@@ -229,12 +231,19 @@ export function TrackClient({
       </header>
 
       <section className="mq-card p-5">
+        {bankInfo ? (
+          <div className="mb-4 rounded-lg bg-brand-soft px-3 py-3 text-sm text-zinc-700">
+            <p className="font-semibold text-zinc-900">{bankInfo.name}</p>
+            {bankInfo.roadAddress ? <p className="mt-1">{bankInfo.roadAddress}</p> : null}
+            {bankInfo.jibunAddress ? <p className="mt-0.5 text-xs text-zinc-500">지번: {bankInfo.jibunAddress}</p> : null}
+          </div>
+        ) : null}
         <div className="grid gap-3">
           <label className="grid gap-1 text-sm">
             <span className="font-medium text-zinc-700">주문번호</span>
             <input
               value={orderCode}
-              onChange={(event) => setOrderCode(normalizeCustomerOrderCode(event.target.value))}
+              onChange={(event) => setOrderCode(event.target.value.toUpperCase())}
               className="mq-input"
               placeholder="예: 0001"
             />
@@ -250,15 +259,6 @@ export function TrackClient({
             />
           </label>
 
-          <label className="grid gap-1 text-sm">
-            <span className="font-medium text-zinc-700">매장 슬러그 (선택)</span>
-            <input
-              value={storeSlug}
-              onChange={(event) => setStoreSlug(event.target.value)}
-              className="mq-input"
-              placeholder="예: nahyun-mart"
-            />
-          </label>
         </div>
 
         {errorMessage ? (
