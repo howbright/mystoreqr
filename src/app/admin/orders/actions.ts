@@ -85,10 +85,18 @@ export async function setOrderQuoteAction(formData: FormData) {
     redirectWithError(storeSlug, `주문 조회 실패: ${existingOrderError.message}`)
   }
 
+  if (!existingOrder) {
+    redirectWithError(storeSlug, "주문을 찾을 수 없습니다.")
+  }
+
+  if (existingOrder.payment_status === "confirmed") {
+    redirectWithError(storeSlug, "입금확인된 주문은 가격을 다시 확정할 수 없습니다.")
+  }
+
   const nextPaymentStatus =
-    existingOrder?.payment_status === "not_ready"
+    existingOrder.payment_status === "not_ready"
       ? "waiting_transfer"
-      : existingOrder?.payment_status ?? "waiting_transfer"
+      : existingOrder.payment_status
 
   const { data, error } = await supabase
     .from("orders")
@@ -104,6 +112,7 @@ export async function setOrderQuoteAction(formData: FormData) {
     })
     .eq("id", orderId)
     .eq("status", "pending")
+    .neq("payment_status", "confirmed")
     .select("id, payment_status")
 
   if (error) {
@@ -111,7 +120,10 @@ export async function setOrderQuoteAction(formData: FormData) {
   }
 
   if (!data || data.length === 0) {
-    redirectWithError(storeSlug, "가격 확정 가능한 주문이 아닙니다. (pending 상태만 가능)")
+    redirectWithError(
+      storeSlug,
+      "가격 확정 가능한 주문이 아닙니다. (pending 상태이며 입금확인 전 주문만 가능)"
+    )
   }
 
   await writeAdminActionLog({

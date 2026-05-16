@@ -161,6 +161,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
           const hasUnknownLine = order.order_items.some((item) => item.unit_price == null)
           const defaultSubtotal = order.subtotal_amount ?? knownLineTotal
           const defaultDeliveryFee = order.delivery_fee ?? selectedStore.delivery_fee
+          const isPaymentConfirmed = order.payment_status === "confirmed"
           const orderSummaryText = [
             `주문번호: ${order.order_code}`,
             `고객: ${order.customer_name} / ${formatPhone(order.customer_phone)}`,
@@ -261,6 +262,11 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                   <input type="hidden" name="orderId" value={order.id} />
                   <input type="hidden" name="storeSlug" value={selectedStore.slug} />
                   <p className="text-sm font-semibold text-zinc-900">가격 확정</p>
+                  {isPaymentConfirmed ? (
+                    <p className="mt-2 rounded-md bg-emerald-50 px-2 py-1 text-xs text-emerald-700">
+                      입금확인 완료 주문은 가격을 수정할 수 없습니다.
+                    </p>
+                  ) : null}
                   <label className="mt-2 grid gap-1 text-xs text-zinc-600">
                     상품 합계
                     <input
@@ -268,7 +274,8 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                       type="number"
                       min={0}
                       defaultValue={defaultSubtotal}
-                      className="h-9 rounded-md border border-zinc-300 px-2 text-sm focus:border-brand focus:outline-none"
+                      disabled={isPaymentConfirmed}
+                      className="h-9 rounded-md border border-zinc-300 px-2 text-sm disabled:cursor-not-allowed disabled:bg-zinc-100 focus:border-brand focus:outline-none"
                     />
                   </label>
                   <label className="mt-2 grid gap-1 text-xs text-zinc-600">
@@ -278,7 +285,8 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                       type="number"
                       min={0}
                       defaultValue={defaultDeliveryFee}
-                      className="h-9 rounded-md border border-zinc-300 px-2 text-sm focus:border-brand focus:outline-none"
+                      disabled={isPaymentConfirmed}
+                      className="h-9 rounded-md border border-zinc-300 px-2 text-sm disabled:cursor-not-allowed disabled:bg-zinc-100 focus:border-brand focus:outline-none"
                     />
                   </label>
                   <label className="mt-2 grid gap-1 text-xs text-zinc-600">
@@ -286,12 +294,14 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                     <textarea
                       name="priceNote"
                       defaultValue={order.price_note ?? ""}
-                      className="min-h-16 rounded-md border border-zinc-300 px-2 py-1 text-sm focus:border-brand focus:outline-none"
+                      disabled={isPaymentConfirmed}
+                      className="min-h-16 rounded-md border border-zinc-300 px-2 py-1 text-sm disabled:cursor-not-allowed disabled:bg-zinc-100 focus:border-brand focus:outline-none"
                     />
                   </label>
                   <button
                     type="submit"
-                    className="mq-btn-primary mt-3 h-9 w-full rounded-md"
+                    disabled={isPaymentConfirmed}
+                    className="mq-btn-primary mt-3 h-9 w-full rounded-md disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     가격 확정 저장
                   </button>
