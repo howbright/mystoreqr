@@ -7,6 +7,10 @@ import { orderStatusLabel, paymentStatusLabel, priceStatusLabel } from "@/lib/my
 import type { Database } from "@/types/database.type"
 
 type TrackingOrder = Database["public"]["Functions"]["get_order_tracking_v2"]["Returns"][number]
+type TrackingItem = Pick<
+  Database["public"]["Tables"]["order_items"]["Row"],
+  "product_name" | "quantity" | "unit_price" | "line_total"
+>
 
 type BankInfo = {
   name: string
@@ -20,6 +24,7 @@ type TrackClientProps = {
   initialPhone: string
   initialStoreSlug: string
   initialOrder: TrackingOrder | null
+  initialItems: TrackingItem[]
   initialBankInfo: BankInfo | null
 }
 
@@ -102,6 +107,7 @@ export function TrackClient({
   initialPhone,
   initialStoreSlug,
   initialOrder,
+  initialItems,
   initialBankInfo,
 }: TrackClientProps) {
   const [lookupToken, setLookupToken] = useState(initialLookupToken)
@@ -113,6 +119,7 @@ export function TrackClient({
   const [refreshIntervalSeconds, setRefreshIntervalSeconds] = useState(20)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [order, setOrder] = useState<TrackingOrder | null>(initialOrder)
+  const [orderItems, setOrderItems] = useState<TrackingItem[]>(initialItems)
   const [bankInfo, setBankInfo] = useState<BankInfo | null>(initialBankInfo)
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(
     initialOrder ? new Date(initialOrder.updated_at).getTime() : null
@@ -143,7 +150,7 @@ export function TrackClient({
 
       const payload = (await response.json()) as
         | { error: string }
-        | { order: TrackingOrder; bankInfo: BankInfo | null }
+        | { order: TrackingOrder; items: TrackingItem[]; bankInfo: BankInfo | null }
 
       if (!response.ok) {
         if (!silent) {
@@ -162,6 +169,7 @@ export function TrackClient({
       }
 
       setOrder(payload.order)
+      setOrderItems(payload.items ?? [])
       if (payload.bankInfo) {
         setBankInfo(payload.bankInfo)
       }
@@ -399,6 +407,26 @@ export function TrackClient({
             <div className="rounded-lg bg-zinc-50 px-3 py-2 text-sm text-zinc-700">
               <p className="font-medium">사장님 메모</p>
               <p className="mt-1 whitespace-pre-wrap">{order.price_note}</p>
+            </div>
+          ) : null}
+
+          {order.price_status === "quoted" ? (
+            <div className="rounded-lg border border-brand-border bg-brand-soft px-3 py-3 text-sm text-brand-strong">
+              가격확정이 완료되었습니다. 계좌로 입금해주시면, 입금 확인 후 상품이 준비됩니다.
+            </div>
+          ) : null}
+
+          {orderItems.length > 0 ? (
+            <div className="rounded-lg border border-zinc-200 p-3">
+              <p className="text-sm font-semibold text-zinc-900">확정 상품 가격</p>
+              <div className="mt-2 space-y-1 text-sm text-zinc-700">
+                {orderItems.map((item) => (
+                  <p key={`${item.product_name}-${item.quantity}-${item.unit_price ?? "na"}`}>
+                    {item.product_name} / {item.quantity}개 / 단가 {formatKrw(item.unit_price)} / 합계{" "}
+                    {formatKrw(item.line_total)}
+                  </p>
+                ))}
+              </div>
             </div>
           ) : null}
 

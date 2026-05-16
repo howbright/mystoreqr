@@ -29,6 +29,14 @@ function parseNonNegativeInteger(rawValue: string) {
   return value
 }
 
+function parseRequiredNonNegativeInteger(rawValue: string) {
+  if (!rawValue.trim()) {
+    return null
+  }
+
+  return parseNonNegativeInteger(rawValue)
+}
+
 function sanitizeReturnToPath(rawReturnTo: string, fallbackStoreSlug: string) {
   const fallbackParams = new URLSearchParams()
   if (fallbackStoreSlug) {
@@ -102,7 +110,6 @@ export async function setOrderQuoteAction(formData: FormData) {
   await requireAdminSessionOrRedirect(`/admin/orders?store=${encodeURIComponent(storeSlug)}`)
 
   const orderId = toSafeString(formData.get("orderId"))
-  const subtotalAmount = parseNonNegativeInteger(toSafeString(formData.get("subtotalAmount")))
   const deliveryFee = parseNonNegativeInteger(toSafeString(formData.get("deliveryFee")))
   const priceNote = toSafeString(formData.get("priceNote"))
 
@@ -110,12 +117,11 @@ export async function setOrderQuoteAction(formData: FormData) {
     redirectWithError(storeSlug, "주문 ID 형식이 올바르지 않습니다.", returnTo)
   }
 
-  if (subtotalAmount == null || deliveryFee == null) {
-    redirectWithError(storeSlug, "금액은 0 이상의 정수로 입력해 주세요.", returnTo)
+  if (deliveryFee == null) {
+    redirectWithError(storeSlug, "배달비는 0 이상의 정수로 입력해 주세요.", returnTo)
   }
 
   const supabase = getAdminClientOrRedirect(storeSlug, returnTo)
-  const totalAmount = subtotalAmount + deliveryFee
 
   const { data: existingOrder, error: existingOrderError } = await supabase
     .from("orders")
@@ -133,6 +139,59 @@ export async function setOrderQuoteAction(formData: FormData) {
 
   if (existingOrder.payment_status === "confirmed") {
     redirectWithError(storeSlug, "입금확인된 주문은 가격을 다시 확정할 수 없습니다.", returnTo)
+  }
+
+  const { data: orderItems, error: orderItemsError } = await supabase
+    .from("order_items")
+    .select("id, product_name, quantity")
+    .eq("order_id", orderId)
+    .order("created_at", { ascending: true })
+
+  if (orderItemsError) {
+    redirectWithError(storeSlug, `주문 상품 조회 실패: ${orderItemsError.message}`, returnTo)
+  }
+
+  if (!orderItems || orderItems.length === 0) {
+    redirectWithError(storeSlug, "가격 확정할 주문 상품이 없습니다.", returnTo)
+  }
+
+  const parsedItemPrices = orderItems.map((item) => {
+    const rawUnitPrice = toSafeString(formData.get(`itemPrice__${item.id}`))
+    const unitPrice = parseRequiredNonNegativeInteger(rawUnitPrice)
+
+    if (unitPrice == null) {
+      redirectWithError(storeSlug, `"${item.product_name}" 단가를 0 이상의 정수로 입력해 주세요.`, returnTo)
+    }
+
+    return {
+      itemId: item.id,
+      productName: item.product_name,
+      quantity: item.quantity,
+      unitPrice,
+      lineTotal: unitPrice * item.quantity,
+    }
+  })
+
+  const subtotalAmount = parsedItemPrices.reduce((acc, item) => acc + item.lineTotal, 0)
+  const totalAmount = subtotalAmount + deliveryFee
+
+  for (const item of parsedItemPrices) {
+    const { error: itemUpdateError } = await supabase
+      .from("order_items")
+      .update({
+        unit_price: item.unitPrice,
+        line_total: item.lineTotal,
+      })
+      .eq("id", item.itemId)
+      .eq("order_id", orderId)
+
+    if (itemUpdateError) {
+      redirectWithError(
+        storeSlug,
+        `주문 상품 단가 저장 실패(${item.productName}): ${itemUpdateError.message}`,
+        returnTo
+      )
+    }
   }
 
   const nextPaymentStatus =
@@ -175,6 +234,7 @@ export async function setOrderQuoteAction(formData: FormData) {
     actionType: "quote_set",
     summary: `가격 확정: 상품합계 ${subtotalAmount}, 배달비 ${deliveryFee}`,
     payload: {
+      lineItems: parsedItemPrices,
       subtotalAmount,
       deliveryFee,
       totalAmount,

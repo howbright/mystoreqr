@@ -1,4 +1,8 @@
-import { getOrderTrackingByToken, getPublicStoreBySlug } from "@/lib/mystoreqr/public-queries"
+import {
+  getOrderTrackingByToken,
+  getOrderTrackingItemsByToken,
+  getPublicStoreBySlug,
+} from "@/lib/mystoreqr/public-queries"
 
 import { TrackClient } from "./track-client"
 
@@ -19,6 +23,10 @@ export default async function TrackPage(props: PageProps<"/track">) {
     initialLookupToken && initialPhone
       ? await getOrderTrackingByToken(initialLookupToken, initialPhone)
       : null
+  const initialItems =
+    initialLookupToken && initialPhone
+      ? await getOrderTrackingItemsByToken(initialLookupToken, initialPhone)
+      : []
 
   const storeBundle = initialStoreSlug ? await getPublicStoreBySlug(initialStoreSlug) : null
 
@@ -37,6 +45,7 @@ export default async function TrackPage(props: PageProps<"/track">) {
       initialPhone={initialPhone}
       initialStoreSlug={initialStoreSlug}
       initialOrder={initialOrder}
+      initialItems={initialItems}
       initialBankInfo={bankInfo}
     />
   )

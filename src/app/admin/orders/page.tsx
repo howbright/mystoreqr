@@ -509,17 +509,30 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                       입금확인 완료 주문은 가격을 수정할 수 없습니다.
                     </p>
                   ) : null}
-                  <label className="mt-2 grid gap-1 text-xs text-zinc-600">
-                    상품 합계
-                    <input
-                      name="subtotalAmount"
-                      type="number"
-                      min={0}
-                      defaultValue={defaultSubtotal}
-                      disabled={isPaymentConfirmed}
-                      className="h-9 rounded-md border border-zinc-300 px-2 text-sm disabled:cursor-not-allowed disabled:bg-zinc-100 focus:border-brand focus:outline-none"
-                    />
-                  </label>
+                  <div className="mt-2 rounded-lg border border-zinc-200 p-2">
+                    <p className="text-xs font-medium text-zinc-700">상품별 단가 입력</p>
+                    <div className="mt-2 space-y-2">
+                      {order.order_items.map((item) => (
+                        <label key={item.id} className="grid grid-cols-[1fr_auto] items-center gap-2 text-xs text-zinc-600">
+                          <span>
+                            {item.product_name} ({item.quantity}개)
+                          </span>
+                          <input
+                            name={`itemPrice__${item.id}`}
+                            type="number"
+                            min={0}
+                            defaultValue={item.unit_price ?? ""}
+                            disabled={isPaymentConfirmed}
+                            className="h-8 w-24 rounded-md border border-zinc-300 px-2 text-right text-sm disabled:cursor-not-allowed disabled:bg-zinc-100 focus:border-brand focus:outline-none"
+                            placeholder="단가"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="mt-2 text-xs text-zinc-600">
+                    현재 계산 기준 상품 합계: <strong>{formatKrw(defaultSubtotal)}</strong>
+                  </p>
                   <label className="mt-2 grid gap-1 text-xs text-zinc-600">
                     배달비
                     <input

@@ -3,6 +3,7 @@ import "server-only"
 import { cache } from "react"
 
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import type { Database, Tables } from "@/types/database.type"
 
 import { normalizePhone } from "./format"
@@ -10,6 +11,7 @@ import { normalizePhone } from "./format"
 type StoreRow = Tables<"stores">
 type CategoryRow = Tables<"categories">
 type ProductRow = Tables<"products">
+type OrderItemRow = Tables<"order_items">
 
 type PublicOrderTracking = Database["public"]["Functions"]["get_order_tracking_v2"]["Returns"][number]
 
@@ -52,6 +54,8 @@ export type PublicStoreBundle = {
   categories: PublicCategory[]
   products: PublicProduct[]
 }
+
+export type PublicTrackingItem = Pick<OrderItemRow, "product_name" | "quantity" | "unit_price" | "line_total">
 
 export const getPublicStoreBySlug = cache(async (slug: string): Promise<PublicStoreBundle | null> => {
   const normalizedSlug = slug.trim().toLowerCase()
@@ -138,4 +142,47 @@ export async function getOrderTrackingByToken(
   }
 
   return data[0]
+}
+
+export async function getOrderTrackingItemsByToken(
+  lookupToken: string,
+  customerPhone: string
+): Promise<PublicTrackingItem[]> {
+  const token = lookupToken.trim()
+  const phone = normalizePhone(customerPhone)
+
+  if (!token || !isUuidLike(token) || phone.length < 10) {
+    return []
+  }
+
+  const supabase = createAdminClient()
+  const { data: order, error: orderError } = await supabase
+    .from("orders")
+    .select("id, customer_phone")
+    .eq("lookup_token", token)
+    .maybeSingle()
+
+  if (orderError) {
+    throw new Error(`주문 조회 실패: ${orderError.message}`)
+  }
+
+  if (!order) {
+    return []
+  }
+
+  if (normalizePhone(order.customer_phone) !== phone) {
+    return []
+  }
+
+  const { data: items, error: itemsError } = await supabase
+    .from("order_items")
+    .select("product_name, quantity, unit_price, line_total")
+    .eq("order_id", order.id)
+    .order("created_at", { ascending: true })
+
+  if (itemsError) {
+    throw new Error(`주문 상품 조회 실패: ${itemsError.message}`)
+  }
+
+  return items ?? []
 }

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server"
 
-import { getOrderTrackingByToken, getPublicStoreBySlug } from "@/lib/mystoreqr/public-queries"
+import {
+  getOrderTrackingByToken,
+  getOrderTrackingItemsByToken,
+  getPublicStoreBySlug,
+} from "@/lib/mystoreqr/public-queries"
 
 type TrackingBody = {
   lookupToken: string
@@ -37,6 +41,7 @@ export async function POST(request: Request) {
   if (!tracking) {
     return errorResponse("주문을 찾을 수 없습니다. 토큰/연락처를 다시 확인해 주세요.", 404)
   }
+  const trackingItems = await getOrderTrackingItemsByToken(payload.lookupToken, payload.customerPhone)
 
   const storeSlug =
     typeof payload.storeSlug === "string" && payload.storeSlug.trim().length > 0
@@ -64,6 +69,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     order: tracking,
+    items: trackingItems,
     bankInfo,
   })
 }
