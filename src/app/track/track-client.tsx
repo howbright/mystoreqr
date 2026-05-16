@@ -23,6 +23,41 @@ type TrackClientProps = {
   initialBankInfo: BankInfo | null
 }
 
+function getOrderStatusBadgeClass(status: TrackingOrder["status"]) {
+  switch (status) {
+    case "completed":
+      return "bg-emerald-100 text-emerald-800 ring-emerald-200"
+    case "delivering":
+      return "bg-sky-100 text-sky-800 ring-sky-200"
+    case "preparing":
+      return "bg-amber-100 text-amber-800 ring-amber-200"
+    case "canceled":
+      return "bg-rose-100 text-rose-800 ring-rose-200"
+    default:
+      return "bg-zinc-100 text-zinc-800 ring-zinc-200"
+  }
+}
+
+function getPaymentStatusBadgeClass(status: TrackingOrder["payment_status"]) {
+  switch (status) {
+    case "confirmed":
+      return "bg-emerald-100 text-emerald-800 ring-emerald-200"
+    case "rejected":
+      return "bg-rose-100 text-rose-800 ring-rose-200"
+    default:
+      return "bg-zinc-100 text-zinc-800 ring-zinc-200"
+  }
+}
+
+function getPriceStatusBadgeClass(status: TrackingOrder["price_status"]) {
+  switch (status) {
+    case "quoted":
+      return "bg-brand-soft text-brand-strong ring-brand-border"
+    default:
+      return "bg-zinc-100 text-zinc-700 ring-zinc-200"
+  }
+}
+
 const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
   dateStyle: "medium",
   timeStyle: "short",
@@ -151,22 +186,38 @@ export function TrackClient({
       {order ? (
         <section className="mq-card space-y-3 p-5">
           <h2 className="text-lg font-semibold text-zinc-900">주문 정보</h2>
+          <div className="rounded-xl border border-brand-border bg-brand-soft p-4">
+            <p className="text-xs font-medium text-brand-strong">현재 주문 상태</p>
+            <p
+              className={`mt-2 inline-flex rounded-full px-4 py-2 text-2xl font-extrabold ring-1 ${getOrderStatusBadgeClass(order.status)}`}
+            >
+              {orderStatusLabel(order.status)}
+            </p>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="rounded-lg border border-zinc-200 p-3">
+              <p className="text-xs text-zinc-500">결제 상태</p>
+              <p
+                className={`mt-1 inline-flex rounded-full px-3 py-1 text-base font-bold ring-1 ${getPaymentStatusBadgeClass(order.payment_status)}`}
+              >
+                {paymentStatusLabel(order.payment_status)}
+              </p>
+            </div>
+            <div className="rounded-lg border border-zinc-200 p-3">
+              <p className="text-xs text-zinc-500">가격 상태</p>
+              <p
+                className={`mt-1 inline-flex rounded-full px-3 py-1 text-base font-bold ring-1 ${getPriceStatusBadgeClass(order.price_status)}`}
+              >
+                {priceStatusLabel(order.price_status)}
+              </p>
+            </div>
+          </div>
+
           <div className="grid gap-2 text-sm text-zinc-700">
             <p className="flex justify-between gap-2">
               <span>주문번호</span>
               <strong>{order.order_code}</strong>
-            </p>
-            <p className="flex justify-between gap-2">
-              <span>주문 상태</span>
-              <strong>{orderStatusLabel(order.status)}</strong>
-            </p>
-            <p className="flex justify-between gap-2">
-              <span>가격 상태</span>
-              <strong>{priceStatusLabel(order.price_status)}</strong>
-            </p>
-            <p className="flex justify-between gap-2">
-              <span>결제 상태</span>
-              <strong>{paymentStatusLabel(order.payment_status)}</strong>
             </p>
             <p className="flex justify-between gap-2">
               <span>상품 합계</span>
