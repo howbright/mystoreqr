@@ -186,9 +186,17 @@ export async function setPaymentStatusAction(formData: FormData) {
     updatePayload.confirmed_by = null
   }
 
-  const { error } = await supabase.from("orders").update(updatePayload).eq("id", orderId)
+  const { data, error } = await supabase
+    .from("orders")
+    .update(updatePayload)
+    .eq("id", orderId)
+    .select("id, payment_status")
   if (error) {
     redirectWithError(storeSlug, `결제 상태 변경 실패: ${error.message}`)
+  }
+
+  if (!data || data.length === 0) {
+    redirectWithError(storeSlug, "결제 상태 변경 대상 주문을 찾지 못했습니다.")
   }
 
   await writeAdminActionLog({
