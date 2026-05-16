@@ -76,6 +76,8 @@ export function Storefront({ storeBundle }: StorefrontProps) {
   const hasUnknownPrice = selectedItems.some((row) => row.lineTotal === null)
   const isBelowMinOrderAmount = !hasUnknownPrice && knownSubtotal < store.min_order_amount
   const missingAmountToMinOrder = Math.max(store.min_order_amount - knownSubtotal, 0)
+  const selectedProductCount = selectedItems.length
+  const selectedQuantityTotal = selectedItems.reduce((acc, item) => acc + item.quantity, 0)
 
   function updateQuantity(productId: string, quantity: number) {
     setQuantities((prev) => {
@@ -87,6 +89,10 @@ export function Storefront({ storeBundle }: StorefrontProps) {
       }
       return next
     })
+  }
+
+  function clearCart() {
+    setQuantities({})
   }
 
   async function handleSubmitOrder(event: React.FormEvent<HTMLFormElement>) {
@@ -231,11 +237,24 @@ export function Storefront({ storeBundle }: StorefrontProps) {
 
         <aside className="space-y-4">
           <section className="mq-card p-4">
-            <h2 className="text-lg font-semibold text-zinc-900">장바구니</h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold text-zinc-900">장바구니</h2>
+              <button
+                type="button"
+                onClick={clearCart}
+                disabled={selectedItems.length === 0}
+                className="rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                전체 비우기
+              </button>
+            </div>
             {selectedItems.length === 0 ? (
               <p className="mt-3 text-sm text-zinc-500">선택된 상품이 없습니다.</p>
             ) : (
               <div className="mt-3 space-y-2 text-sm">
+                <p className="rounded-md bg-zinc-50 px-2 py-1 text-xs text-zinc-600">
+                  선택 {selectedProductCount}종 / 총 {selectedQuantityTotal}개
+                </p>
                 {selectedItems.map((item) => (
                   <div key={item.product.id} className="flex items-start justify-between gap-2">
                     <div>
