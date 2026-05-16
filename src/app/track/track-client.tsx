@@ -23,6 +23,13 @@ type TrackClientProps = {
   initialBankInfo: BankInfo | null
 }
 
+const ORDER_PROGRESS_STEPS = [
+  { key: "pending", label: "접수" },
+  { key: "preparing", label: "준비중" },
+  { key: "delivering", label: "배달중" },
+  { key: "completed", label: "완료" },
+] as const
+
 function getOrderStatusBadgeClass(status: TrackingOrder["status"]) {
   switch (status) {
     case "completed":
@@ -55,6 +62,25 @@ function getPriceStatusBadgeClass(status: TrackingOrder["price_status"]) {
       return "bg-brand-soft text-brand-strong ring-brand-border"
     default:
       return "bg-zinc-100 text-zinc-700 ring-zinc-200"
+  }
+}
+
+function getOrderProgressIndex(status: TrackingOrder["status"]) {
+  switch (status) {
+    case "pending":
+      return 0
+    case "payment_confirmed":
+      return 1
+    case "preparing":
+      return 1
+    case "delivering":
+      return 2
+    case "completed":
+      return 3
+    case "canceled":
+      return -1
+    default:
+      return 0
   }
 }
 
@@ -259,6 +285,48 @@ export function TrackClient({
 
       {order ? (
         <section className="mq-card space-y-3 p-5">
+          {(() => {
+            const progressIndex = getOrderProgressIndex(order.status)
+            const isCanceled = order.status === "canceled"
+
+            return (
+              <div className="rounded-xl border border-zinc-200 bg-white p-4">
+                <p className="text-sm font-semibold text-zinc-900">주문 진행 단계</p>
+                {isCanceled ? (
+                  <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                    주문이 취소되었습니다. 매장에 문의해 주세요.
+                  </p>
+                ) : (
+                  <div className="mt-3 grid grid-cols-4 gap-2">
+                    {ORDER_PROGRESS_STEPS.map((step, index) => {
+                      const isActive = index <= progressIndex
+                      const isCurrent = index === progressIndex
+
+                      return (
+                        <div key={step.key} className="text-center">
+                          <div
+                            className={`mx-auto flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold ${
+                              isActive
+                                ? "bg-brand text-white"
+                                : "bg-zinc-100 text-zinc-500"
+                            } ${isCurrent ? "ring-2 ring-brand-border" : ""}`}
+                          >
+                            {index + 1}
+                          </div>
+                          <p
+                            className={`mt-1 text-xs ${isActive ? "font-semibold text-zinc-900" : "text-zinc-500"}`}
+                          >
+                            {step.label}
+                          </p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
           <h2 className="text-lg font-semibold text-zinc-900">주문 정보</h2>
           <div className="rounded-xl border border-brand-border bg-brand-soft p-4">
             <p className="text-xs font-medium text-brand-strong">현재 주문 상태</p>
