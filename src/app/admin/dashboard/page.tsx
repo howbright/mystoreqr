@@ -8,6 +8,7 @@ import {
   getRecentOrderStatusEventsByStoreId,
 } from "@/lib/mystoreqr/admin-queries"
 import { formatKrw } from "@/lib/mystoreqr/format"
+import { ORDER_WORK_VIEW_META } from "@/lib/mystoreqr/order-work-view"
 import { orderStatusLabel } from "@/lib/mystoreqr/status"
 
 function firstString(value: string | string[] | undefined) {
@@ -71,6 +72,9 @@ export default async function AdminDashboardPage(props: PageProps<"/admin/dashbo
   ])
   const ordersLinks = {
     all: buildOrdersHref(selectedStore.slug, {}),
+    ownerView: buildOrdersHref(selectedStore.slug, { view: "owner" }),
+    prepView: buildOrdersHref(selectedStore.slug, { view: "prep" }),
+    deliveryView: buildOrdersHref(selectedStore.slug, { view: "delivery" }),
     needsReview: buildOrdersHref(selectedStore.slug, { price: "needs_review" }),
     waitingTransfer: buildOrdersHref(selectedStore.slug, { payment: "waiting_transfer" }),
     transferSubmitted: buildOrdersHref(selectedStore.slug, { payment: "transfer_submitted" }),
@@ -158,6 +162,38 @@ export default async function AdminDashboardPage(props: PageProps<"/admin/dashbo
           <p className="text-xs text-zinc-500">총 매출(주문금액 기준)</p>
           <p className="mt-1 text-2xl font-bold text-zinc-900">{formatKrw(metrics.totalRevenue)}</p>
         </Link>
+      </section>
+
+      <section className="mq-card p-4">
+        <h2 className="text-lg font-semibold text-zinc-900">역할별 빠른 이동</h2>
+        <p className="mt-1 text-xs text-zinc-600">담당자별 주문 보드로 바로 이동해서 필요한 액션만 처리할 수 있습니다.</p>
+        <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+          <Link href={ordersLinks.all} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 hover:bg-zinc-50">
+            <p className="text-sm font-semibold text-zinc-900">{ORDER_WORK_VIEW_META.all.label}</p>
+            <p className="mt-0.5 text-xs text-zinc-500">{ORDER_WORK_VIEW_META.all.description}</p>
+          </Link>
+          <Link
+            href={ordersLinks.ownerView}
+            className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 hover:bg-amber-100/70"
+          >
+            <p className="text-sm font-semibold text-amber-900">{ORDER_WORK_VIEW_META.owner.label}</p>
+            <p className="mt-0.5 text-xs text-amber-800">{ORDER_WORK_VIEW_META.owner.description}</p>
+          </Link>
+          <Link
+            href={ordersLinks.prepView}
+            className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 hover:bg-sky-100/70"
+          >
+            <p className="text-sm font-semibold text-sky-900">{ORDER_WORK_VIEW_META.prep.label}</p>
+            <p className="mt-0.5 text-xs text-sky-800">{ORDER_WORK_VIEW_META.prep.description}</p>
+          </Link>
+          <Link
+            href={ordersLinks.deliveryView}
+            className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 hover:bg-emerald-100/70"
+          >
+            <p className="text-sm font-semibold text-emerald-900">{ORDER_WORK_VIEW_META.delivery.label}</p>
+            <p className="mt-0.5 text-xs text-emerald-800">{ORDER_WORK_VIEW_META.delivery.description}</p>
+          </Link>
+        </div>
       </section>
 
       <section className="mq-card p-4">
