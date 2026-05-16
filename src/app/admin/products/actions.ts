@@ -345,3 +345,59 @@ export async function updateProductQuickAction(formData: FormData) {
   revalidatePath("/admin/products")
   redirectWithSuccess(storeSlug, "상품 정보를 저장했습니다.")
 }
+
+export async function updateProductsActiveBulkAction(formData: FormData) {
+  const storeSlug = toSafeString(formData.get("storeSlug"))
+  await requireAdminSessionOrRedirect(`/admin/products?store=${encodeURIComponent(storeSlug)}`)
+
+  const storeId = await getStoreIdBySlugOrRedirect(storeSlug)
+  const allProductIds = formData
+    .getAll("allProductIds")
+    .map((value) => toSafeString(value))
+    .filter(Boolean)
+  const activeProductIdSet = new Set(
+    formData
+      .getAll("activeProductIds")
+      .map((value) => toSafeString(value))
+      .filter(Boolean)
+  )
+
+  if (allProductIds.length === 0) {
+    redirectWithError(storeSlug, "처리할 상품이 없습니다.")
+  }
+
+  const nextActiveIds = allProductIds.filter((id) => activeProductIdSet.has(id))
+  const nextInactiveIds = allProductIds.filter((id) => !activeProductIdSet.has(id))
+
+  const supabase = createAdminClient()
+
+  if (nextActiveIds.length > 0) {
+    const { error: activateError } = await supabase
+      .from("products")
+      .update({ is_active: true })
+      .eq("store_id", storeId)
+      .in("id", nextActiveIds)
+
+    if (activateError) {
+      redirectWithError(storeSlug, `활성 상품 저장 실패: ${activateError.message}`)
+    }
+  }
+
+  if (nextInactiveIds.length > 0) {
+    const { error: deactivateError } = await supabase
+      .from("products")
+      .update({ is_active: false })
+      .eq("store_id", storeId)
+      .in("id", nextInactiveIds)
+
+    if (deactivateError) {
+      redirectWithError(storeSlug, `비활성 상품 저장 실패: ${deactivateError.message}`)
+    }
+  }
+
+  revalidatePath("/admin/products")
+  redirectWithSuccess(
+    storeSlug,
+    `사용여부 저장 완료: 사용 ${nextActiveIds.length}개 / 사용안함 ${nextInactiveIds.length}개`
+  )
+}

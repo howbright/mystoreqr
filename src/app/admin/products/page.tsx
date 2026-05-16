@@ -9,7 +9,11 @@ import {
 } from "@/lib/mystoreqr/admin-queries"
 import { formatKrw } from "@/lib/mystoreqr/format"
 
-import { importProductsCsvAction, updateProductQuickAction } from "./actions"
+import {
+  importProductsCsvAction,
+  updateProductQuickAction,
+  updateProductsActiveBulkAction,
+} from "./actions"
 
 function firstString(value: string | string[] | undefined) {
   if (Array.isArray(value)) {
@@ -150,6 +154,38 @@ export default async function AdminProductsPage(props: PageProps<"/admin/product
           </label>
           <button type="submit" className="mq-btn-primary h-10 w-full md:w-56">
             CSV 반영
+          </button>
+        </form>
+      </section>
+
+      <section className="mq-card p-4">
+        <h2 className="text-lg font-semibold text-zinc-900">사용/사용안함 빠른 시작</h2>
+        <p className="mt-1 text-sm text-zinc-600">
+          이미 가진 상품 DB에서 지금 판매할 상품만 체크하고 한 번에 저장할 수 있습니다.
+        </p>
+
+        <form action={updateProductsActiveBulkAction} className="mt-3">
+          <input type="hidden" name="storeSlug" value={selectedStore.slug} />
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {products.map((product) => (
+              <label key={product.id} className="flex items-center gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-700">
+                <input
+                  type="hidden"
+                  name="allProductIds"
+                  value={product.id}
+                />
+                <input
+                  type="checkbox"
+                  name="activeProductIds"
+                  value={product.id}
+                  defaultChecked={product.is_active}
+                />
+                <span>{product.name}</span>
+              </label>
+            ))}
+          </div>
+          <button type="submit" className="mq-btn-primary mt-3 h-10 w-full md:w-56">
+            사용여부 일괄 저장
           </button>
         </form>
       </section>
