@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_action_logs: {
+        Row: {
+          action_type: string
+          created_at: string
+          id: string
+          order_id: string | null
+          payload: Json
+          store_slug: string
+          summary: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          id?: string
+          order_id?: string | null
+          payload?: Json
+          store_slug: string
+          summary: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          id?: string
+          order_id?: string | null
+          payload?: Json
+          store_slug?: string
+          summary?: string
+        }
+        Relationships: []
+      }
       categories: {
         Row: {
           created_at: string
