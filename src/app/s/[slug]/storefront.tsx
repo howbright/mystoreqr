@@ -103,6 +103,7 @@ export function Storefront({ storeBundle }: StorefrontProps) {
   const [pushPromptDismissed, setPushPromptDismissed] = useState(false)
   const [submitResult, setSubmitResult] = useState<OrderSubmitResult | null>(null)
   const [selectedProductTab, setSelectedProductTab] = useState("best")
+  const [productSearch, setProductSearch] = useState("")
   const recentOrderStorageKey = getRecentOrderStorageKey(store.slug)
   const recentOrderSnapshot = useSyncExternalStore(
     subscribeToRecentOrderChange,
@@ -143,6 +144,23 @@ export function Storefront({ storeBundle }: StorefrontProps) {
   )
 
   const visibleProductSections = useMemo(() => {
+    const normalizedSearch = productSearch.trim().toLowerCase()
+    if (normalizedSearch) {
+      const matchedProducts = products.filter((product) => {
+        const searchable = `${product.name} ${product.description ?? ""}`.toLowerCase()
+        return searchable.includes(normalizedSearch)
+      })
+
+      return [
+        {
+          id: "search",
+          name: "검색 결과",
+          products: matchedProducts,
+          emptyMessage: "검색된 상품이 없습니다.",
+        },
+      ]
+    }
+
     if (selectedProductTab === "best") {
       return [
         {
@@ -180,7 +198,7 @@ export function Storefront({ storeBundle }: StorefrontProps) {
           },
         ]
       : []
-  }, [categoriesWithProducts, products, selectedProductTab])
+  }, [categoriesWithProducts, productSearch, products, selectedProductTab])
 
   const selectedItems = useMemo(() => {
     return products
@@ -410,6 +428,30 @@ export function Storefront({ storeBundle }: StorefrontProps) {
         <p className="mt-1 text-sm text-zinc-600">
           가격이 비어있는 상품은 주문 후 매장에서 최종 금액을 확인해 안내합니다.
         </p>
+        <div className="mt-3">
+          <label className="sr-only" htmlFor="product-search">
+            상품 검색
+          </label>
+          <div className="relative">
+            <input
+              id="product-search"
+              value={productSearch}
+              onChange={(event) => setProductSearch(event.target.value)}
+              className="h-11 w-full rounded-lg border border-zinc-300 px-3 pr-10 text-sm focus:border-brand focus:outline-none"
+              placeholder="상품 검색"
+            />
+            {productSearch ? (
+              <button
+                type="button"
+                onClick={() => setProductSearch("")}
+                aria-label="상품 검색어 지우기"
+                className="absolute top-1/2 right-2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-base font-bold text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
+              >
+                ×
+              </button>
+            ) : null}
+          </div>
+        </div>
         <div className="mt-3 flex flex-wrap gap-1.5">
           {productTabs.map((tab) => (
             <button
