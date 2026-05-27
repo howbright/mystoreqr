@@ -4,6 +4,8 @@ import { logoutAdminAction } from "@/app/admin/_actions/auth"
 import { requireAdminSessionOrRedirect } from "@/lib/mystoreqr/admin-auth"
 import { getAdminStores } from "@/lib/mystoreqr/admin-queries"
 
+import { updateStoreOrderPolicyAction } from "./actions"
+
 function firstString(value: string | string[] | undefined) {
   if (Array.isArray(value)) {
     return value[0]
@@ -48,6 +50,8 @@ export default async function AdminOnboardingPage(props: PageProps<"/admin/onboa
   const selectedStore = stores.find((store) => store.slug === storeSlugParam) ?? stores[0]
   const orderPageUrl = `${getAppBaseUrl()}/s/${selectedStore.slug}`
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(orderPageUrl)}`
+  const successMessage = firstString(searchParams.ok)
+  const errorMessage = firstString(searchParams.error)
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-6 md:px-8">
@@ -105,6 +109,13 @@ export default async function AdminOnboardingPage(props: PageProps<"/admin/onboa
         ))}
       </nav>
 
+      {successMessage ? (
+        <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{successMessage}</p>
+      ) : null}
+      {errorMessage ? (
+        <p className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">{errorMessage}</p>
+      ) : null}
+
       <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
         <article className="mq-card p-5">
           <h2 className="text-lg font-semibold text-zinc-900">QR 안내</h2>
@@ -133,13 +144,37 @@ export default async function AdminOnboardingPage(props: PageProps<"/admin/onboa
             <li>가격 미확정 상품은 빈 가격으로 두고 설명에 시세 표기</li>
             <li>QR 출력 후 매장 입구/계산대에 부착</li>
             <li>테스트 주문 1건 진행 후 관리자에서 가격 확정</li>
-            <li>주문 상태를 준비중 → 배달중 → 완료로 변경해 흐름 점검</li>
+            <li>주문 상태를 준비중 → 준비완료 → 배달중 → 완료로 변경해 흐름 점검</li>
           </ol>
 
           <div className="mt-4 rounded-xl bg-brand-soft p-3 text-sm text-brand-strong">
             핵심 메시지: 수수료 0%, 고객 회원가입 없음, 매장 통장 직입금
           </div>
         </article>
+      </section>
+
+      <section className="mq-card p-5">
+        <h2 className="text-lg font-semibold text-zinc-900">{selectedStore.name}의 주문정책</h2>
+        <p className="mt-2 text-sm text-zinc-600">
+          고객 주문 페이지의 주문자 정보 위에 표시됩니다. 최소 주문금액, 배달비, 가격 확정 방식처럼 주문 전에
+          꼭 알아야 하는 내용을 적어주세요.
+        </p>
+        <form action={updateStoreOrderPolicyAction} className="mt-4 space-y-3">
+          <input type="hidden" name="storeSlug" value={selectedStore.slug} />
+          <textarea
+            name="orderPolicy"
+            defaultValue={selectedStore.order_policy ?? ""}
+            className="min-h-32 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-brand focus:outline-none"
+            maxLength={1000}
+            placeholder="예: 3만원 이상 주문 시 배달비가 무료입니다. 3만원 미만 주문은 배달비가 별도로 추가될 수 있습니다."
+          />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-zinc-500">최대 1,000자까지 입력할 수 있습니다.</p>
+            <button type="submit" className="mq-btn-primary h-10 px-4">
+              주문정책 저장
+            </button>
+          </div>
+        </form>
       </section>
     </main>
   )

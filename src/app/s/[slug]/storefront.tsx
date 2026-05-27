@@ -81,11 +81,11 @@ function parseRecentOrders(value: string | null): RecentOrder[] {
 
 export function Storefront({ storeBundle }: StorefrontProps) {
   const { store, categories, products } = storeBundle
-  const storeName = store.slug === "jinro" ? "진로마트" : store.name
-  const storePhone = store.slug === "jinro" ? "0507-1392-5070" : store.phone
-  const storeRoadAddress =
-    store.slug === "jinro" ? "경기도 성남시 중원구 둔촌대로 159 1층 진로마트 모란점" : store.address_road
-  const storeJibunAddress = store.slug === "jinro" ? "성남동 3791" : store.address_detail
+  const storeName = store.name
+  const storePhone = store.phone
+  const storeRoadAddress = store.address_road
+  const storeJibunAddress = store.address_detail
+  const orderPolicy = store.order_policy?.trim() || null
   const [loadedAt] = useState(() => Date.now())
   const [quantities, setQuantities] = useState<Record<string, number>>({})
   const [customerForm, setCustomerForm] = useState<CustomerForm>({
@@ -100,7 +100,9 @@ export function Storefront({ storeBundle }: StorefrontProps) {
   const [isSubscribingToPush, setIsSubscribingToPush] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [pushMessage, setPushMessage] = useState<string | null>(null)
+  const [pushPromptDismissed, setPushPromptDismissed] = useState(false)
   const [submitResult, setSubmitResult] = useState<OrderSubmitResult | null>(null)
+  const [selectedProductTab, setSelectedProductTab] = useState("best")
   const recentOrderStorageKey = getRecentOrderStorageKey(store.slug)
   const recentOrderSnapshot = useSyncExternalStore(
     subscribeToRecentOrderChange,
@@ -127,6 +129,58 @@ export function Storefront({ storeBundle }: StorefrontProps) {
 
     return group.filter((category) => category.products.length > 0)
   }, [categories, products])
+
+  const productTabs = useMemo(
+    () => [
+      { key: "best", label: "오늘의 베스트" },
+      { key: "discount", label: "오늘의 할인상품" },
+      ...categoriesWithProducts.map((category) => ({
+        key: `category:${category.id}`,
+        label: category.name,
+      })),
+    ],
+    [categoriesWithProducts]
+  )
+
+  const visibleProductSections = useMemo(() => {
+    if (selectedProductTab === "best") {
+      return [
+        {
+          id: "best",
+          name: "오늘의 베스트",
+          products: products.slice(0, 4),
+          emptyMessage: "오늘의 베스트 상품이 아직 없습니다.",
+        },
+      ]
+    }
+
+    if (selectedProductTab === "discount") {
+      const discountProducts = products.filter((product) => {
+        const text = `${product.name} ${product.description ?? ""}`
+        return text.includes("할인") || text.includes("특가")
+      })
+
+      return [
+        {
+          id: "discount",
+          name: "오늘의 할인상품",
+          products: discountProducts,
+          emptyMessage: "오늘 등록된 할인상품이 없습니다.",
+        },
+      ]
+    }
+
+    const categoryId = selectedProductTab.replace(/^category:/, "")
+    const category = categoriesWithProducts.find((row) => row.id === categoryId)
+    return category
+      ? [
+          {
+            ...category,
+            emptyMessage: "등록된 상품이 없습니다.",
+          },
+        ]
+      : []
+  }, [categoriesWithProducts, products, selectedProductTab])
 
   const selectedItems = useMemo(() => {
     return products
@@ -221,6 +275,8 @@ export function Storefront({ storeBundle }: StorefrontProps) {
         orderCode: payload.orderCode,
         trackingPath: payload.trackingPath,
       })
+      setPushPromptDismissed(false)
+      setPushMessage(null)
       const nextRecentOrder = {
         orderCode: payload.orderCode,
         trackingPath: payload.trackingPath,
@@ -306,6 +362,7 @@ export function Storefront({ storeBundle }: StorefrontProps) {
       }
 
       setPushMessage("금액이 확정되면 이 브라우저로 알림을 보내드릴게요.")
+      setPushPromptDismissed(true)
     } catch {
       setPushMessage("알림 신청 중 오류가 발생했습니다.")
     } finally {
@@ -323,10 +380,6 @@ export function Storefront({ storeBundle }: StorefrontProps) {
         {storeJibunAddress ? <p className="mt-1 text-xs text-zinc-500">지번: {storeJibunAddress}</p> : null}
         <div className="mt-3 flex flex-wrap gap-2 text-xs text-zinc-600">
           <span className="mq-chip">전화 {formatPhone(storePhone)}</span>
-          <span className="mq-chip">
-            최소주문 {formatKrw(store.min_order_amount)}
-          </span>
-          <span className="mq-chip">기본배달비 {formatKrw(store.delivery_fee)}</span>
         </div>
         <Link
           href={`/track?store=${encodeURIComponent(store.slug)}`}
@@ -352,63 +405,92 @@ export function Storefront({ storeBundle }: StorefrontProps) {
         ) : null}
       </header>
 
+      <section>
+        <h2 className="text-xl font-bold text-zinc-900">필요한 상품을 담아주세요</h2>
+        <p className="mt-1 text-sm text-zinc-600">
+          가격이 비어있는 상품은 주문 후 매장에서 최종 금액을 확인해 안내합니다.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {productTabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setSelectedProductTab(tab.key)}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap sm:px-4 sm:py-2 sm:text-sm ${
+                selectedProductTab === tab.key
+                  ? "bg-brand text-white"
+                  : "bg-zinc-100 text-zinc-700 hover:bg-brand-soft"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
       <section className="grid gap-4 lg:grid-cols-[2fr_1fr]">
         <div className="space-y-4">
-          {categoriesWithProducts.map((category) => (
+          {visibleProductSections.map((category) => (
             <article key={category.id} className="mq-card p-4">
               <h2 className="text-lg font-semibold text-zinc-900">{category.name}</h2>
-              <div className="mt-3 space-y-3">
-                {category.products.map((product) => {
-                  const quantity = quantities[product.id] ?? 0
-                  return (
-                    <div
-                      key={product.id}
-                      className="flex items-center justify-between rounded-xl border border-zinc-100 p-3"
-                    >
-                      <div className="pr-2">
-                        <p className="font-medium text-zinc-900">{product.name}</p>
-                        <p className="text-sm text-zinc-600">
-                          {formatKrw(product.price)}
-                          {product.unit ? ` / ${product.unit}` : ""}
-                        </p>
-                        {product.description ? (
-                          <p className="mt-1 text-xs text-zinc-500">{product.description}</p>
-                        ) : null}
-                        {product.is_sold_out ? (
-                          <p className="mt-1 text-xs font-semibold text-rose-600">품절</p>
-                        ) : null}
-                      </div>
+              {category.products.length === 0 ? (
+                <p className="mt-3 rounded-lg bg-zinc-50 px-3 py-3 text-sm text-zinc-500">
+                  {category.emptyMessage}
+                </p>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  {category.products.map((product) => {
+                    const quantity = quantities[product.id] ?? 0
+                    return (
+                      <div
+                        key={product.id}
+                        className="flex items-center justify-between rounded-xl border border-zinc-100 p-3"
+                      >
+                        <div className="pr-2">
+                          <p className="font-medium text-zinc-900">{product.name}</p>
+                          <p className="text-sm text-zinc-600">
+                            {formatKrw(product.price)}
+                            {product.unit ? ` / ${product.unit}` : ""}
+                          </p>
+                          {product.description ? (
+                            <p className="mt-1 text-xs text-zinc-500">{product.description}</p>
+                          ) : null}
+                          {product.is_sold_out ? (
+                            <p className="mt-1 text-xs font-semibold text-rose-600">품절</p>
+                          ) : null}
+                        </div>
 
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => updateQuantity(product.id, quantity - 1)}
-                          className="h-8 w-8 rounded-full border border-zinc-300 text-sm font-bold text-brand-strong disabled:opacity-40"
-                          disabled={quantity <= 0 || product.is_sold_out}
-                        >
-                          -
-                        </button>
-                        <input
-                          type="number"
-                          min={0}
-                          value={quantity}
-                          onChange={(event) => updateQuantity(product.id, Number(event.target.value) || 0)}
-                          className="h-8 w-14 rounded-md border border-zinc-300 px-2 text-center text-sm focus:border-brand focus:outline-none"
-                          disabled={product.is_sold_out}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => updateQuantity(product.id, quantity + 1)}
-                          className="h-8 w-8 rounded-full border border-zinc-300 text-sm font-bold text-brand-strong disabled:opacity-40"
-                          disabled={product.is_sold_out}
-                        >
-                          +
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(product.id, quantity - 1)}
+                            className="h-8 w-8 rounded-full border border-zinc-300 text-sm font-bold text-brand-strong disabled:opacity-40"
+                            disabled={quantity <= 0 || product.is_sold_out}
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            min={0}
+                            value={quantity}
+                            onChange={(event) => updateQuantity(product.id, Number(event.target.value) || 0)}
+                            className="h-8 w-14 rounded-md border border-zinc-300 px-2 text-center text-sm focus:border-brand focus:outline-none"
+                            disabled={product.is_sold_out}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(product.id, quantity + 1)}
+                            className="h-8 w-8 rounded-full border border-zinc-300 text-sm font-bold text-brand-strong disabled:opacity-40"
+                            disabled={product.is_sold_out}
+                          >
+                            +
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  )
-                })}
-              </div>
+                    )
+                  })}
+                </div>
+              )}
             </article>
           ))}
         </div>
@@ -439,7 +521,9 @@ export function Storefront({ storeBundle }: StorefrontProps) {
                       <p className="font-medium text-zinc-800">{item.product.name}</p>
                       <p className="text-zinc-500">{item.quantity}개</p>
                     </div>
-                    <p className="font-semibold text-zinc-900">{formatKrw(item.lineTotal)}</p>
+                    <p className={`font-semibold ${item.lineTotal == null ? "text-amber-700" : "text-zinc-900"}`}>
+                      {formatKrw(item.lineTotal)}
+                    </p>
                   </div>
                 ))}
                 <div className="border-t border-zinc-200 pt-2">
@@ -601,14 +685,33 @@ export function Storefront({ storeBundle }: StorefrontProps) {
                     {formatCustomerOrderCode(submitResult.orderCode)}
                   </p>
                   <p className="mt-3 text-xs text-zinc-500">화면을 닫기 전에 번호를 확인해 주세요.</p>
-                  <button
-                    type="button"
-                    onClick={() => void subscribeToQuotePush()}
-                    disabled={isSubscribingToPush}
-                    className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-lg border border-brand px-4 text-sm font-bold text-brand-strong hover:bg-brand-soft disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isSubscribingToPush ? "알림 신청 중..." : "금액 확정 알림 받기"}
-                  </button>
+                  {!pushPromptDismissed ? (
+                    <div className="mt-5 rounded-lg border border-brand-border bg-brand-soft px-3 py-3">
+                      <p className="text-sm font-semibold text-zinc-900">
+                        금액이 확정되면 이 브라우저로 알림을 보내드릴까요?
+                      </p>
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void subscribeToQuotePush()}
+                          disabled={isSubscribingToPush}
+                          className="inline-flex h-10 items-center justify-center rounded-lg bg-brand px-3 text-sm font-bold text-white hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isSubscribingToPush ? "신청 중..." : "네, 받을게요"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPushPromptDismissed(true)
+                            setPushMessage("알림 없이 주문번호로 직접 조회할 수 있습니다.")
+                          }}
+                          className="inline-flex h-10 items-center justify-center rounded-lg border border-zinc-300 bg-white px-3 text-sm font-bold text-zinc-700 hover:bg-zinc-50"
+                        >
+                          아니요
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                   {pushMessage ? <p className="mt-2 text-xs text-zinc-600">{pushMessage}</p> : null}
                   <Link
                     href={submitResult.trackingPath}
@@ -626,15 +729,16 @@ export function Storefront({ storeBundle }: StorefrontProps) {
               >
                 {isSubmitting ? "주문 접수 중..." : "주문 접수"}
               </button>
+
+              {orderPolicy ? (
+                <section className="rounded-xl border-2 border-brand bg-brand-soft p-4 shadow-sm">
+                  <h3 className="text-base font-extrabold text-brand-strong">{storeName}의 주문정책</h3>
+                  <p className="mt-3 whitespace-pre-wrap text-sm font-medium leading-6 text-zinc-800">{orderPolicy}</p>
+                </section>
+              ) : null}
             </form>
           </section>
 
-          <section className="mq-card bg-brand-soft p-4 text-sm text-zinc-700">
-            <h2 className="font-semibold text-zinc-900">입금 계좌 (가격 확정 후)</h2>
-            <p className="mt-2">{store.bank_name}</p>
-            <p>{store.bank_account_number}</p>
-            <p>예금주: {store.bank_account_holder}</p>
-          </section>
         </aside>
       </section>
     </main>

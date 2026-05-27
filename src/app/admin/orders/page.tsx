@@ -18,7 +18,8 @@ import {
 import { orderStatusLabel, paymentStatusLabel, priceStatusLabel } from "@/lib/mystoreqr/status"
 
 import { OrderTools } from "./order-tools"
-import { setOrderQuoteAction, setOrderStatusAction, setPaymentStatusAction } from "./actions"
+import { QuoteForm } from "./quote-form"
+import { setOrderStatusAction, setPaymentStatusAction } from "./actions"
 
 const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
   dateStyle: "medium",
@@ -26,6 +27,22 @@ const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
 })
 
 const PRICE_STATUS_OPTIONS = ["needs_review", "quoted"] as const
+const SUMMARY_FILTER_OPTIONS = [
+  "all_orders",
+  "pending",
+  "price_needs_review",
+  "price_quoted",
+  "payment_attention",
+  "payment_waiting",
+  "payment_submitted",
+  "prep_queue",
+  "preparing",
+  "ready_for_delivery",
+  "delivering",
+  "completed",
+] as const
+
+type SummaryFilter = (typeof SUMMARY_FILTER_OPTIONS)[number]
 
 function firstString(value: string | string[] | undefined) {
   if (Array.isArray(value)) {
@@ -46,6 +63,41 @@ function getAppBaseUrl() {
   }
 
   return "http://localhost:3000"
+}
+
+function matchesSummaryFilter(
+  order: Awaited<ReturnType<typeof getAdminOrdersByStoreId>>[number],
+  filter: SummaryFilter
+) {
+  switch (filter) {
+    case "pending":
+      return order.status === "pending"
+    case "price_needs_review":
+      return order.price_status === "needs_review"
+    case "price_quoted":
+      return order.price_status === "quoted"
+    case "payment_attention":
+      return order.payment_status === "transfer_submitted" || order.payment_status === "waiting_transfer"
+    case "payment_waiting":
+      return order.payment_status === "waiting_transfer"
+    case "payment_submitted":
+      return order.payment_status === "transfer_submitted"
+    case "prep_queue":
+      return (
+        order.status === "payment_confirmed" ||
+        (order.status === "pending" && order.payment_status === "confirmed")
+      )
+    case "preparing":
+      return order.status === "preparing"
+    case "ready_for_delivery":
+      return order.status === "ready_for_delivery"
+    case "delivering":
+      return order.status === "delivering"
+    case "completed":
+      return order.status === "completed"
+    case "all_orders":
+      return true
+  }
 }
 
 function getOrderPriorityMeta(
@@ -72,6 +124,14 @@ function getOrderPriorityMeta(
       containerClass: "border-emerald-300 bg-emerald-50/30",
       label: "진행중: 배달중",
       labelClass: "bg-emerald-100 text-emerald-800",
+    }
+  }
+
+  if (order.status === "ready_for_delivery") {
+    return {
+      containerClass: "border-cyan-300 bg-cyan-50/40",
+      label: "대기: 준비완료",
+      labelClass: "bg-cyan-100 text-cyan-800",
     }
   }
 
@@ -107,6 +167,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
   const statusFilterRaw = firstString(searchParams.status)?.trim()
   const paymentFilterRaw = firstString(searchParams.payment)?.trim()
   const priceFilterRaw = firstString(searchParams.price)?.trim()
+  const summaryFilterRaw = firstString(searchParams.summary)?.trim()
   const keywordFilter = firstString(searchParams.q)?.trim() ?? ""
   const successMessage = firstString(searchParams.ok)
   const errorMessage = firstString(searchParams.error)
@@ -147,17 +208,25 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
     PRICE_STATUS_OPTIONS.includes(priceFilterRaw as (typeof PRICE_STATUS_OPTIONS)[number])
       ? (priceFilterRaw as (typeof PRICE_STATUS_OPTIONS)[number])
       : "all"
+  const selectedSummaryFilter: SummaryFilter =
+    SUMMARY_FILTER_OPTIONS.includes(summaryFilterRaw as SummaryFilter)
+      ? (summaryFilterRaw as SummaryFilter)
+      : "all_orders"
+  const showStructuredFilters = selectedWorkView === "all"
+  const effectiveStatusFilter = showStructuredFilters ? statusFilter : "all"
+  const effectivePaymentFilter = showStructuredFilters ? paymentFilter : "all"
+  const effectivePriceFilter = showStructuredFilters ? priceFilter : "all"
   const normalizedKeyword = keywordFilter.toLowerCase()
   const baseFilteredOrders = orders.filter((order) => {
-    if (statusFilter !== "all" && order.status !== statusFilter) {
+    if (effectiveStatusFilter !== "all" && order.status !== effectiveStatusFilter) {
       return false
     }
 
-    if (paymentFilter !== "all" && order.payment_status !== paymentFilter) {
+    if (effectivePaymentFilter !== "all" && order.payment_status !== effectivePaymentFilter) {
       return false
     }
 
-    if (priceFilter !== "all" && order.price_status !== priceFilter) {
+    if (effectivePriceFilter !== "all" && order.price_status !== effectivePriceFilter) {
       return false
     }
 
@@ -178,9 +247,10 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
 
     return searchable.includes(normalizedKeyword)
   })
-  const filteredOrders = baseFilteredOrders.filter((order) =>
+  const roleFilteredOrders = baseFilteredOrders.filter((order) =>
     isOrderVisibleInWorkView(order, selectedWorkView)
   )
+  const filteredOrders = roleFilteredOrders.filter((order) => matchesSummaryFilter(order, selectedSummaryFilter))
   const workViewCounts = Object.fromEntries(
     ORDER_WORK_VIEWS.map((view) => [
       view,
@@ -189,22 +259,27 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
   ) as Record<(typeof ORDER_WORK_VIEWS)[number], number>
   const hasActiveFilters =
     selectedWorkView !== "all" ||
-    statusFilter !== "all" ||
-    paymentFilter !== "all" ||
-    priceFilter !== "all" ||
+    effectiveStatusFilter !== "all" ||
+    effectivePaymentFilter !== "all" ||
+    effectivePriceFilter !== "all" ||
+    selectedSummaryFilter !== "all_orders" ||
     normalizedKeyword.length > 0
   const persistentFilterParams = new URLSearchParams()
-  if (statusFilter !== "all") {
-    persistentFilterParams.set("status", statusFilter)
+  if (effectiveStatusFilter !== "all") {
+    persistentFilterParams.set("status", effectiveStatusFilter)
   }
-  if (paymentFilter !== "all") {
-    persistentFilterParams.set("payment", paymentFilter)
+  if (effectivePaymentFilter !== "all") {
+    persistentFilterParams.set("payment", effectivePaymentFilter)
   }
-  if (priceFilter !== "all") {
-    persistentFilterParams.set("price", priceFilter)
+  if (effectivePriceFilter !== "all") {
+    persistentFilterParams.set("price", effectivePriceFilter)
   }
   if (keywordFilter) {
     persistentFilterParams.set("q", keywordFilter)
+  }
+  const persistentParamsWithSummary = new URLSearchParams(persistentFilterParams)
+  if (selectedSummaryFilter !== "all_orders") {
+    persistentParamsWithSummary.set("summary", selectedSummaryFilter)
   }
   function buildOrdersHref(storeSlug: string, workView = selectedWorkView) {
     const params = new URLSearchParams(persistentFilterParams)
@@ -214,31 +289,99 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
     }
     return `/admin/orders?${params.toString()}`
   }
+  function buildSummaryFilterHref(summaryFilter: SummaryFilter) {
+    const params = new URLSearchParams(persistentFilterParams)
+    params.set("store", selectedStore.slug)
+    if (selectedWorkView !== "all") {
+      params.set("view", selectedWorkView)
+    }
+    if (summaryFilter !== "all_orders") {
+      params.set("summary", summaryFilter)
+    }
+    return `/admin/orders?${params.toString()}`
+  }
   const resetFilterParams = new URLSearchParams()
   resetFilterParams.set("store", selectedStore.slug)
   if (selectedWorkView !== "all") {
     resetFilterParams.set("view", selectedWorkView)
   }
   const resetFiltersHref = `/admin/orders?${resetFilterParams.toString()}`
-  const actionReturnTo = buildOrdersHref(selectedStore.slug, selectedWorkView)
+  const resetSearchParams = new URLSearchParams()
+  resetSearchParams.set("store", selectedStore.slug)
+  if (selectedWorkView !== "all") {
+    resetSearchParams.set("view", selectedWorkView)
+  }
+  if (effectiveStatusFilter !== "all") {
+    resetSearchParams.set("status", effectiveStatusFilter)
+  }
+  if (effectivePaymentFilter !== "all") {
+    resetSearchParams.set("payment", effectivePaymentFilter)
+  }
+  if (effectivePriceFilter !== "all") {
+    resetSearchParams.set("price", effectivePriceFilter)
+  }
+  if (selectedSummaryFilter !== "all_orders") {
+    resetSearchParams.set("summary", selectedSummaryFilter)
+  }
+  const resetSearchHref = `/admin/orders?${resetSearchParams.toString()}`
+  const actionReturnTo = (() => {
+    const params = new URLSearchParams(persistentParamsWithSummary)
+    params.set("store", selectedStore.slug)
+    if (selectedWorkView !== "all") {
+      params.set("view", selectedWorkView)
+    }
+    return `/admin/orders?${params.toString()}`
+  })()
   const appBaseUrl = getAppBaseUrl()
-  const paymentAttentionCount = filteredOrders.filter(
+  const paymentAttentionCount = roleFilteredOrders.filter(
     (order) => order.payment_status === "transfer_submitted" || order.payment_status === "waiting_transfer"
   ).length
-  const prepQueueCount = filteredOrders.filter(
+  const priceNeedsReviewCount = roleFilteredOrders.filter((order) => order.price_status === "needs_review").length
+  const priceQuotedCount = roleFilteredOrders.filter((order) => order.price_status === "quoted").length
+  const paymentWaitingCount = roleFilteredOrders.filter((order) => order.payment_status === "waiting_transfer").length
+  const paymentSubmittedCount = roleFilteredOrders.filter((order) => order.payment_status === "transfer_submitted").length
+  const prepQueueCount = roleFilteredOrders.filter(
     (order) =>
-      order.status === "preparing" ||
       order.status === "payment_confirmed" ||
       (order.status === "pending" && order.payment_status === "confirmed")
   ).length
-  const deliveryActiveCount = filteredOrders.filter(
-    (order) => order.status === "preparing" || order.status === "delivering"
-  ).length
+  const preparingCount = roleFilteredOrders.filter((order) => order.status === "preparing").length
+  const readyForDeliveryCount = roleFilteredOrders.filter((order) => order.status === "ready_for_delivery").length
+  const deliveringCount = roleFilteredOrders.filter((order) => order.status === "delivering").length
+  const completedCount = roleFilteredOrders.filter((order) => order.status === "completed").length
+  const summaryCards: { key: SummaryFilter; label: string; value: number }[] =
+    selectedWorkView === "quote"
+      ? [
+          { key: "price_needs_review", label: "가격 확정 대기", value: priceNeedsReviewCount },
+          { key: "price_quoted", label: "가격 확정 완료", value: priceQuotedCount },
+        ]
+      : selectedWorkView === "payment"
+        ? [
+            { key: "payment_waiting", label: "입금 대기", value: paymentWaitingCount },
+            { key: "payment_submitted", label: "입금 신고됨", value: paymentSubmittedCount },
+          ]
+        : selectedWorkView === "prep"
+          ? [
+              { key: "prep_queue", label: "준비 대기", value: prepQueueCount },
+              { key: "preparing", label: "준비중", value: preparingCount },
+              { key: "ready_for_delivery", label: "준비완료", value: readyForDeliveryCount },
+            ]
+          : selectedWorkView === "delivery"
+            ? [
+                { key: "ready_for_delivery", label: "준비완료", value: readyForDeliveryCount },
+                { key: "delivering", label: "배달중", value: deliveringCount },
+                { key: "completed", label: "배달완료", value: completedCount },
+              ]
+            : [
+                { key: "all_orders", label: "현재 뷰 주문", value: roleFilteredOrders.length },
+                { key: "price_needs_review", label: "가격 확정 대기", value: priceNeedsReviewCount },
+                { key: "payment_attention", label: "입금 확인 필요", value: paymentAttentionCount },
+              ]
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-6 md:px-8">
       <header className="mq-card p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <p className="text-sm font-medium text-brand-strong">MyStoreQR Admin</p>
             <h1 className="mt-1 text-2xl font-bold text-zinc-900">주문 보드</h1>
@@ -247,29 +390,29 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
               {selectedStore.phone ? ` (${formatPhone(selectedStore.phone)})` : ""}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
             <Link
               href={`/admin/products?store=${encodeURIComponent(selectedStore.slug)}`}
-              className="rounded-lg bg-brand-soft px-3 py-2 text-sm font-medium text-brand-strong hover:bg-brand-border"
+              className="rounded-lg bg-brand-soft px-3 py-2 text-center text-sm font-medium whitespace-nowrap text-brand-strong hover:bg-brand-border"
             >
               상품 관리
             </Link>
             <Link
               href={`/admin/dashboard?store=${encodeURIComponent(selectedStore.slug)}`}
-              className="rounded-lg bg-brand-soft px-3 py-2 text-sm font-medium text-brand-strong hover:bg-brand-border"
+              className="rounded-lg bg-brand-soft px-3 py-2 text-center text-sm font-medium whitespace-nowrap text-brand-strong hover:bg-brand-border"
             >
               대시보드
             </Link>
             <Link
               href={`/admin/onboarding?store=${encodeURIComponent(selectedStore.slug)}`}
-              className="rounded-lg bg-brand-soft px-3 py-2 text-sm font-medium text-brand-strong hover:bg-brand-border"
+              className="rounded-lg bg-brand-soft px-3 py-2 text-center text-sm font-medium whitespace-nowrap text-brand-strong hover:bg-brand-border"
             >
               온보딩
             </Link>
             <form action={logoutAdminAction}>
               <button
                 type="submit"
-                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100"
+                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm whitespace-nowrap text-zinc-700 hover:bg-zinc-100"
               >
                 로그아웃
               </button>
@@ -322,69 +465,95 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
       ) : null}
 
       <section className="mq-card p-4">
-        <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <form className={`grid gap-3 ${showStructuredFilters ? "md:grid-cols-2 xl:grid-cols-5" : "md:grid-cols-1"}`}>
           <input type="hidden" name="store" value={selectedStore.slug} />
           <input type="hidden" name="view" value={selectedWorkView} />
-          <label className="grid gap-1 text-xs text-zinc-600">
-            주문 상태
-            <select
-              name="status"
-              defaultValue={statusFilter}
-              className="h-10 rounded-md border border-zinc-300 px-2 text-sm focus:border-brand focus:outline-none"
-            >
-              <option value="all">전체</option>
-              {ORDER_STATUS_OPTIONS.map((status) => (
-                <option key={status} value={status}>
-                  {orderStatusLabel(status)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1 text-xs text-zinc-600">
-            결제 상태
-            <select
-              name="payment"
-              defaultValue={paymentFilter}
-              className="h-10 rounded-md border border-zinc-300 px-2 text-sm focus:border-brand focus:outline-none"
-            >
-              <option value="all">전체</option>
-              {PAYMENT_STATUS_OPTIONS.map((status) => (
-                <option key={status} value={status}>
-                  {paymentStatusLabel(status)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1 text-xs text-zinc-600">
-            가격 상태
-            <select
-              name="price"
-              defaultValue={priceFilter}
-              className="h-10 rounded-md border border-zinc-300 px-2 text-sm focus:border-brand focus:outline-none"
-            >
-              <option value="all">전체</option>
-              <option value="needs_review">{priceStatusLabel("needs_review")}</option>
-              <option value="quoted">{priceStatusLabel("quoted")}</option>
-            </select>
-          </label>
-          <label className="grid gap-1 text-xs text-zinc-600 xl:col-span-2">
+          {selectedSummaryFilter !== "all_orders" ? (
+            <input type="hidden" name="summary" value={selectedSummaryFilter} />
+          ) : null}
+          {showStructuredFilters ? (
+            <>
+              <label className="grid gap-1 text-xs text-zinc-600">
+                주문 상태
+                <select
+                  name="status"
+                  defaultValue={statusFilter}
+                  className="h-10 rounded-md border border-zinc-300 px-2 text-sm focus:border-brand focus:outline-none"
+                >
+                  <option value="all">전체</option>
+                  {ORDER_STATUS_OPTIONS.map((status) => (
+                    <option key={status} value={status}>
+                      {orderStatusLabel(status)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1 text-xs text-zinc-600">
+                결제 상태
+                <select
+                  name="payment"
+                  defaultValue={paymentFilter}
+                  className="h-10 rounded-md border border-zinc-300 px-2 text-sm focus:border-brand focus:outline-none"
+                >
+                  <option value="all">전체</option>
+                  {PAYMENT_STATUS_OPTIONS.map((status) => (
+                    <option key={status} value={status}>
+                      {paymentStatusLabel(status)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1 text-xs text-zinc-600">
+                가격 상태
+                <select
+                  name="price"
+                  defaultValue={priceFilter}
+                  className="h-10 rounded-md border border-zinc-300 px-2 text-sm focus:border-brand focus:outline-none"
+                >
+                  <option value="all">전체</option>
+                  <option value="needs_review">{priceStatusLabel("needs_review")}</option>
+                  <option value="quoted">{priceStatusLabel("quoted")}</option>
+                </select>
+              </label>
+            </>
+          ) : null}
+          <label className={`grid gap-1 text-xs text-zinc-600 ${showStructuredFilters ? "xl:col-span-2" : ""}`}>
             검색 (주문번호/고객명/연락처/주소)
             <div className="flex gap-2">
-              <input
-                name="q"
-                defaultValue={keywordFilter}
-                className="h-10 w-full rounded-md border border-zinc-300 px-3 text-sm focus:border-brand focus:outline-none"
-                placeholder="예: 0101234, 홍길동, 240511..."
-              />
-              <button type="submit" className="mq-btn-primary h-10 min-w-24 rounded-md">
-                필터 적용
-              </button>
-              <Link
-                href={resetFiltersHref}
-                className="inline-flex h-10 min-w-24 items-center justify-center rounded-md border border-zinc-300 px-3 text-sm text-zinc-700 hover:bg-zinc-100"
-              >
-                초기화
-              </Link>
+              <div className="relative w-full">
+                <input
+                  name="q"
+                  defaultValue={keywordFilter}
+                  className="h-10 w-full rounded-md border border-zinc-300 px-3 pr-10 text-sm focus:border-brand focus:outline-none"
+                  placeholder="예: 0101234, 홍길동, 240511..."
+                />
+                {keywordFilter ? (
+                  <Link
+                    href={resetSearchHref}
+                    aria-label="검색어 초기화"
+                    className="absolute top-1/2 right-2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-base font-bold text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
+                  >
+                    ×
+                  </Link>
+                ) : null}
+              </div>
+              {showStructuredFilters ? (
+                <>
+                  <button type="submit" className="mq-btn-primary h-10 min-w-24 rounded-md">
+                    필터 적용
+                  </button>
+                  <Link
+                    href={resetFiltersHref}
+                    className="inline-flex h-10 min-w-24 items-center justify-center rounded-md border border-zinc-300 px-3 text-sm text-zinc-700 hover:bg-zinc-100"
+                  >
+                    초기화
+                  </Link>
+                </>
+              ) : (
+                <button type="submit" className="h-10 min-w-16 rounded-md bg-brand px-3 text-sm font-semibold text-white hover:bg-brand-strong">
+                  조회
+                </button>
+              )}
             </div>
           </label>
         </form>
@@ -396,19 +565,24 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                 역할: {ORDER_WORK_VIEW_META[selectedWorkView].label}
               </span>
             ) : null}
-            {statusFilter !== "all" ? (
+            {effectiveStatusFilter !== "all" ? (
               <span className="rounded-full bg-brand-soft px-2 py-1 text-brand-strong">
-                주문: {orderStatusLabel(statusFilter)}
+                주문: {orderStatusLabel(effectiveStatusFilter)}
               </span>
             ) : null}
-            {paymentFilter !== "all" ? (
+            {effectivePaymentFilter !== "all" ? (
               <span className="rounded-full bg-brand-soft px-2 py-1 text-brand-strong">
-                결제: {paymentStatusLabel(paymentFilter)}
+                결제: {paymentStatusLabel(effectivePaymentFilter)}
               </span>
             ) : null}
-            {priceFilter !== "all" ? (
+            {effectivePriceFilter !== "all" ? (
               <span className="rounded-full bg-brand-soft px-2 py-1 text-brand-strong">
-                가격: {priceStatusLabel(priceFilter)}
+                가격: {priceStatusLabel(effectivePriceFilter)}
+              </span>
+            ) : null}
+            {selectedSummaryFilter !== "all_orders" ? (
+              <span className="rounded-full bg-brand-soft px-2 py-1 text-brand-strong">
+                빠른필터: {summaryCards.find((card) => card.key === selectedSummaryFilter)?.label ?? selectedSummaryFilter}
               </span>
             ) : null}
             {keywordFilter ? (
@@ -420,32 +594,35 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
         ) : null}
       </section>
 
-      <section className="grid gap-3 md:grid-cols-3">
-        <div className="mq-card rounded-xl p-4">
-          <p className="text-xs text-zinc-500">현재 뷰 주문</p>
-          <p className="mt-1 text-2xl font-bold text-zinc-900">{filteredOrders.length}</p>
-        </div>
-        <div className="mq-card rounded-xl p-4">
-          <p className="text-xs text-zinc-500">가격 확정 대기</p>
-          <p className="mt-1 text-2xl font-bold text-zinc-900">
-            {filteredOrders.filter((order) => order.price_status === "needs_review").length}
-          </p>
-        </div>
-        <div className="mq-card rounded-xl p-4">
-          <p className="text-xs text-zinc-500">
-            {selectedWorkView === "prep"
-              ? "준비 작업 대상"
-              : selectedWorkView === "delivery"
-                ? "배달 진행 대상"
-                : "입금 확인 필요"}
-          </p>
-          <p className="mt-1 text-2xl font-bold text-zinc-900">
-            {selectedWorkView === "prep"
-              ? prepQueueCount
-              : selectedWorkView === "delivery"
-                ? deliveryActiveCount
-                : paymentAttentionCount}
-          </p>
+      <section className="mq-card p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={buildSummaryFilterHref("all_orders")}
+            scroll={false}
+            aria-current={selectedSummaryFilter === "all_orders" ? "true" : undefined}
+            className={`rounded-lg border px-3 py-2 text-left text-xs font-semibold ring-1 ${
+              selectedSummaryFilter === "all_orders"
+                ? "border-brand bg-brand text-white shadow-sm ring-brand"
+                : "border-zinc-200 bg-white text-zinc-700 ring-zinc-200 hover:bg-brand-soft hover:text-brand-strong"
+            }`}
+          >
+            전체 <span className="ml-1 font-black">{roleFilteredOrders.length}</span>
+          </Link>
+        {summaryCards.filter((card) => card.key !== "all_orders").map((card) => (
+          <Link
+            key={card.key}
+            href={buildSummaryFilterHref(card.key)}
+            scroll={false}
+            aria-current={selectedSummaryFilter === card.key ? "true" : undefined}
+            className={`rounded-lg border px-3 py-2 text-left text-xs font-semibold ring-1 ${
+              selectedSummaryFilter === card.key
+                ? "border-brand bg-brand text-white shadow-sm ring-brand"
+                : "border-zinc-200 bg-white text-zinc-700 ring-zinc-200 hover:bg-brand-soft hover:text-brand-strong"
+            }`}
+          >
+            {card.label} <span className="ml-1 font-black">{card.value}</span>
+          </Link>
+        ))}
         </div>
       </section>
 
@@ -453,7 +630,6 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
         {filteredOrders.map((order) => {
           const knownLineTotal = order.order_items.reduce((acc, item) => acc + (item.line_total ?? 0), 0)
           const hasUnknownLine = order.order_items.some((item) => item.unit_price == null)
-          const defaultSubtotal = order.subtotal_amount ?? knownLineTotal
           const defaultDeliveryFee = order.delivery_fee ?? selectedStore.delivery_fee
           const isPaymentConfirmed = order.payment_status === "confirmed"
           const canManageQuote = canManageQuoteInView(selectedWorkView)
@@ -469,8 +645,10 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
               ? "준비 상태 처리"
               : selectedWorkView === "delivery"
                 ? "배달 상태 처리"
-                : selectedWorkView === "owner"
-                  ? "사장님 상태 처리"
+                : selectedWorkView === "quote"
+                  ? "가격확정담당 상태 처리"
+                  : selectedWorkView === "payment"
+                    ? "입금확인담당 상태 처리"
                   : "주문 상태 빠른 변경"
           const priorityMeta = getOrderPriorityMeta(order)
           const trackingPath = `/track?token=${encodeURIComponent(order.lookup_token)}&phone=${encodeURIComponent(order.customer_phone)}&store=${encodeURIComponent(selectedStore.slug)}`
@@ -522,15 +700,21 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                       {priorityMeta.label}
                     </span>
                   ) : null}
-                  <span className="rounded-full bg-brand-soft px-2 py-1 text-brand-strong">
-                    주문 {orderStatusLabel(order.status)}
-                  </span>
-                  <span className="rounded-full bg-brand-soft px-2 py-1 text-brand-strong">
-                    가격 {priceStatusLabel(order.price_status)}
-                  </span>
-                  <span className="rounded-full bg-brand-soft px-2 py-1 text-brand-strong">
-                    결제 {paymentStatusLabel(order.payment_status)}
-                  </span>
+                  {["all", "quote", "prep", "delivery"].includes(selectedWorkView) ? (
+                    <span className="rounded-full bg-brand-soft px-2 py-1 text-brand-strong">
+                      주문 {orderStatusLabel(order.status)}
+                    </span>
+                  ) : null}
+                  {["all", "quote"].includes(selectedWorkView) ? (
+                    <span className="rounded-full bg-brand-soft px-2 py-1 text-brand-strong">
+                      가격 {priceStatusLabel(order.price_status)}
+                    </span>
+                  ) : null}
+                  {["all", "payment"].includes(selectedWorkView) ? (
+                    <span className="rounded-full bg-brand-soft px-2 py-1 text-brand-strong">
+                      결제 {paymentStatusLabel(order.payment_status)}
+                    </span>
+                  ) : null}
                 </div>
               </div>
               <div className="mt-2">
@@ -590,72 +774,16 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
 
               <div className={`mt-4 grid gap-3 ${actionGridClass}`}>
                 {canManageQuote ? (
-                  <form action={setOrderQuoteAction} className="rounded-xl border border-brand-border p-3">
-                    <input type="hidden" name="orderId" value={order.id} />
-                    <input type="hidden" name="storeSlug" value={selectedStore.slug} />
-                    <input type="hidden" name="returnTo" value={actionReturnTo} />
-                    <input type="hidden" name="actorView" value={selectedWorkView} />
-                    <p className="text-sm font-semibold text-zinc-900">가격 확정</p>
-                    {isPaymentConfirmed ? (
-                      <p className="mt-2 rounded-md bg-emerald-50 px-2 py-1 text-xs text-emerald-700">
-                        입금확인 완료 주문은 가격을 수정할 수 없습니다.
-                      </p>
-                    ) : null}
-                    <div className="mt-2 rounded-lg border border-zinc-200 p-2">
-                      <p className="text-xs font-medium text-zinc-700">상품별 단가 입력</p>
-                      <div className="mt-2 space-y-2">
-                        {order.order_items.map((item) => (
-                          <label
-                            key={item.id}
-                            className="grid grid-cols-[1fr_auto] items-center gap-2 text-xs text-zinc-600"
-                          >
-                            <span>
-                              {item.product_name} ({item.quantity}개)
-                            </span>
-                            <input
-                              name={`itemPrice__${item.id}`}
-                              type="number"
-                              min={0}
-                              defaultValue={item.unit_price ?? ""}
-                              disabled={isPaymentConfirmed}
-                              className="h-8 w-24 rounded-md border border-zinc-300 px-2 text-right text-sm disabled:cursor-not-allowed disabled:bg-zinc-100 focus:border-brand focus:outline-none"
-                              placeholder="단가"
-                            />
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                    <p className="mt-2 text-xs text-zinc-600">
-                      현재 계산 기준 상품 합계: <strong>{formatKrw(defaultSubtotal)}</strong>
-                    </p>
-                    <label className="mt-2 grid gap-1 text-xs text-zinc-600">
-                      배달비
-                      <input
-                        name="deliveryFee"
-                        type="number"
-                        min={0}
-                        defaultValue={defaultDeliveryFee}
-                        disabled={isPaymentConfirmed}
-                        className="h-9 rounded-md border border-zinc-300 px-2 text-sm disabled:cursor-not-allowed disabled:bg-zinc-100 focus:border-brand focus:outline-none"
-                      />
-                    </label>
-                    <label className="mt-2 grid gap-1 text-xs text-zinc-600">
-                      메모
-                      <textarea
-                        name="priceNote"
-                        defaultValue={order.price_note ?? ""}
-                        disabled={isPaymentConfirmed}
-                        className="min-h-16 rounded-md border border-zinc-300 px-2 py-1 text-sm disabled:cursor-not-allowed disabled:bg-zinc-100 focus:border-brand focus:outline-none"
-                      />
-                    </label>
-                    <button
-                      type="submit"
-                      disabled={isPaymentConfirmed}
-                      className="mq-btn-primary mt-3 h-9 w-full rounded-md disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      가격 확정 저장
-                    </button>
-                  </form>
+                  <QuoteForm
+                    orderId={order.id}
+                    storeSlug={selectedStore.slug}
+                    returnTo={actionReturnTo}
+                    actorView={selectedWorkView}
+                    items={order.order_items}
+                    defaultDeliveryFee={defaultDeliveryFee}
+                    priceNote={order.price_note}
+                    isPaymentConfirmed={isPaymentConfirmed}
+                  />
                 ) : null}
 
                 {showStatusForm ? (

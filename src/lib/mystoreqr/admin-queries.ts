@@ -16,6 +16,7 @@ export type AdminStore = Pick<
   | "id"
   | "slug"
   | "name"
+  | "order_policy"
   | "delivery_fee"
   | "phone"
   | "bank_name"
@@ -96,16 +97,17 @@ export type AdminOrderStatusEvent = Pick<
 }
 
 export type AdminRoleQueueCounts = {
-  ownerPendingCount: number
+  quotePendingCount: number
+  paymentPendingCount: number
   prepPendingCount: number
-  deliveringCount: number
+  deliveryReadyCount: number
 }
 
 export async function getAdminStores(): Promise<AdminStore[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("stores")
-    .select("id, slug, name, delivery_fee, phone, bank_name, bank_account_number, bank_account_holder")
+    .select("id, slug, name, order_policy, delivery_fee, phone, bank_name, bank_account_number, bank_account_holder")
     .order("created_at", { ascending: true })
 
   if (error) {
@@ -297,36 +299,47 @@ function toCountValue(count: number | null) {
 export async function getAdminRoleQueueCountsByStoreId(storeId: string): Promise<AdminRoleQueueCounts> {
   const supabase = await createClient()
 
-  const [ownerResult, prepResult, deliveryResult] = await Promise.all([
+  const [quoteResult, paymentResult, prepResult, deliveryResult] = await Promise.all([
     supabase
       .from("orders")
       .select("id", { count: "exact", head: true })
       .eq("store_id", storeId)
       .neq("status", "completed")
       .neq("status", "canceled")
+      .eq("price_status", "needs_review"),
+    supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("store_id", storeId)
+      .neq("status", "completed")
+      .neq("status", "canceled")
+      .eq("price_status", "quoted")
+      .in("payment_status", ["waiting_transfer", "transfer_submitted", "rejected"]),
+    supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("store_id", storeId)
       .or(
         [
-          "price_status.eq.needs_review",
-          "payment_status.eq.waiting_transfer",
-          "payment_status.eq.transfer_submitted",
-          "payment_status.eq.rejected",
+          "status.eq.payment_confirmed",
+          "status.eq.preparing",
+          "and(status.eq.pending,payment_status.eq.confirmed)",
         ].join(",")
       ),
     supabase
       .from("orders")
       .select("id", { count: "exact", head: true })
       .eq("store_id", storeId)
-      .or(["status.eq.payment_confirmed", "and(status.eq.pending,payment_status.eq.confirmed)"].join(",")),
-    supabase
-      .from("orders")
-      .select("id", { count: "exact", head: true })
-      .eq("store_id", storeId)
       .eq("fulfillment_type", "delivery")
-      .eq("status", "delivering"),
+      .eq("status", "ready_for_delivery"),
   ])
 
-  if (ownerResult.error) {
-    throw new Error(`사장님 처리대기 집계 실패: ${ownerResult.error.message}`)
+  if (quoteResult.error) {
+    throw new Error(`가격확정대기 집계 실패: ${quoteResult.error.message}`)
+  }
+
+  if (paymentResult.error) {
+    throw new Error(`입금확인대기 집계 실패: ${paymentResult.error.message}`)
   }
 
   if (prepResult.error) {
@@ -334,12 +347,13 @@ export async function getAdminRoleQueueCountsByStoreId(storeId: string): Promise
   }
 
   if (deliveryResult.error) {
-    throw new Error(`배달중 집계 실패: ${deliveryResult.error.message}`)
+    throw new Error(`배달대기 집계 실패: ${deliveryResult.error.message}`)
   }
 
   return {
-    ownerPendingCount: toCountValue(ownerResult.count),
+    quotePendingCount: toCountValue(quoteResult.count),
+    paymentPendingCount: toCountValue(paymentResult.count),
     prepPendingCount: toCountValue(prepResult.count),
-    deliveringCount: toCountValue(deliveryResult.count),
+    deliveryReadyCount: toCountValue(deliveryResult.count),
   }
 }

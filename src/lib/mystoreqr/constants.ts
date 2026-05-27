@@ -7,6 +7,7 @@ export const ORDER_STATUS_OPTIONS: OrderStatus[] = [
   "pending",
   "payment_confirmed",
   "preparing",
+  "ready_for_delivery",
   "delivering",
   "completed",
   "canceled",

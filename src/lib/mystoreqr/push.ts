@@ -9,6 +9,14 @@ type PushSubscriptionRecord = {
   auth: string
 }
 
+type PushSendResult = {
+  configured: boolean
+  subscriptionCount: number
+  sentCount: number
+  failedCount: number
+  errorMessages: string[]
+}
+
 function getVapidConfig() {
   const publicKey = process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY
   const privateKey = process.env.WEB_PUSH_VAPID_PRIVATE_KEY
@@ -37,7 +45,13 @@ export function isWebPushConfigured() {
 
 export async function sendQuoteReadyPush(orderId: string) {
   if (!configureWebPush()) {
-    return
+    return {
+      configured: false,
+      subscriptionCount: 0,
+      sentCount: 0,
+      failedCount: 0,
+      errorMessages: ["web push is not configured"],
+    } satisfies PushSendResult
   }
 
   const supabase = createAdminClient()
@@ -48,7 +62,13 @@ export async function sendQuoteReadyPush(orderId: string) {
     .maybeSingle()
 
   if (orderError || !order) {
-    return
+    return {
+      configured: true,
+      subscriptionCount: 0,
+      sentCount: 0,
+      failedCount: 1,
+      errorMessages: [orderError?.message ?? "order not found"],
+    } satisfies PushSendResult
   }
 
   const { data: subscriptions, error: subscriptionsError } = await (
@@ -68,7 +88,13 @@ export async function sendQuoteReadyPush(orderId: string) {
     .eq("order_id", orderId)
 
   if (subscriptionsError || !subscriptions || subscriptions.length === 0) {
-    return
+    return {
+      configured: true,
+      subscriptionCount: subscriptions?.length ?? 0,
+      sentCount: 0,
+      failedCount: subscriptionsError ? 1 : 0,
+      errorMessages: subscriptionsError ? [subscriptionsError.message] : [],
+    } satisfies PushSendResult
   }
 
   const storeName = Array.isArray(order.stores) ? order.stores[0]?.name : order.stores?.name
@@ -80,7 +106,7 @@ export async function sendQuoteReadyPush(orderId: string) {
     url: trackingPath,
   })
 
-  await Promise.allSettled(
+  const results = await Promise.allSettled(
     subscriptions.map((subscription) =>
       webPush.sendNotification(
         {
@@ -94,6 +120,19 @@ export async function sendQuoteReadyPush(orderId: string) {
       )
     )
   )
+
+  const failedResults = results.filter((result) => result.status === "rejected")
+  return {
+    configured: true,
+    subscriptionCount: subscriptions.length,
+    sentCount: results.length - failedResults.length,
+    failedCount: failedResults.length,
+    errorMessages: failedResults.map((result) =>
+      result.status === "rejected" && result.reason instanceof Error
+        ? result.reason.message
+        : "unknown push send failure"
+    ),
+  } satisfies PushSendResult
 }
 
 export function isExpiredPushSubscriptionError(error: unknown) {

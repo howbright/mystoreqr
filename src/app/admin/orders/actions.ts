@@ -192,7 +192,6 @@ export async function setOrderQuoteAction(formData: FormData) {
       .from("order_items")
       .update({
         unit_price: item.unitPrice,
-        line_total: item.lineTotal,
       })
       .eq("id", item.itemId)
       .eq("order_id", orderId)
@@ -254,7 +253,14 @@ export async function setOrderQuoteAction(formData: FormData) {
     },
   })
 
-  await sendQuoteReadyPush(orderId)
+  const pushResult = await sendQuoteReadyPush(orderId)
+  await writeAdminActionLog({
+    storeSlug,
+    orderId,
+    actionType: "quote_push_sent",
+    summary: `가격 확정 푸시: 구독 ${pushResult.subscriptionCount}, 성공 ${pushResult.sentCount}, 실패 ${pushResult.failedCount}`,
+    payload: pushResult,
+  })
 
   revalidatePath("/admin/orders")
   redirectWithSuccess(storeSlug, "가격 확정을 완료했습니다.", returnTo)

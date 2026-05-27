@@ -399,6 +399,7 @@ export type Database = {
           is_active: boolean
           min_order_amount: number
           name: string
+          order_policy: string | null
           phone: string | null
           pickup_enabled: boolean
           postal_code: string | null
@@ -420,6 +421,7 @@ export type Database = {
           is_active?: boolean
           min_order_amount?: number
           name: string
+          order_policy?: string | null
           phone?: string | null
           pickup_enabled?: boolean
           postal_code?: string | null
@@ -441,6 +443,7 @@ export type Database = {
           is_active?: boolean
           min_order_amount?: number
           name?: string
+          order_policy?: string | null
           phone?: string | null
           pickup_enabled?: boolean
           postal_code?: string | null
@@ -565,6 +568,7 @@ export type Database = {
         | "pending"
         | "payment_confirmed"
         | "preparing"
+        | "ready_for_delivery"
         | "completed"
         | "canceled"
         | "delivering"
@@ -710,6 +714,7 @@ export const Constants = {
         "pending",
         "payment_confirmed",
         "preparing",
+        "ready_for_delivery",
         "completed",
         "canceled",
         "delivering",

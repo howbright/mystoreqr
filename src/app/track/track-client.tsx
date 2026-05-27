@@ -1,6 +1,8 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import refreshIcon from "@iconify-icons/mdi/refresh"
+import { Icon } from "@iconify/react"
+import { useCallback, useEffect, useState, type FormEvent } from "react"
 
 import { formatCustomerOrderCode, formatKrw, normalizeCustomerOrderCode } from "@/lib/mystoreqr/format"
 import { orderStatusLabel, paymentStatusLabel, priceStatusLabel } from "@/lib/mystoreqr/status"
@@ -34,6 +36,7 @@ type TrackClientProps = {
 const ORDER_PROGRESS_STEPS = [
   { key: "pending", label: "접수" },
   { key: "preparing", label: "준비중" },
+  { key: "ready_for_delivery", label: "준비완료" },
   { key: "delivering", label: "배달중" },
   { key: "completed", label: "완료" },
 ] as const
@@ -44,6 +47,8 @@ function getOrderStatusBadgeClass(status: TrackingOrder["status"]) {
       return "bg-emerald-100 text-emerald-800 ring-emerald-200"
     case "delivering":
       return "bg-sky-100 text-sky-800 ring-sky-200"
+    case "ready_for_delivery":
+      return "bg-cyan-100 text-cyan-800 ring-cyan-200"
     case "preparing":
       return "bg-amber-100 text-amber-800 ring-amber-200"
     case "canceled":
@@ -81,15 +86,88 @@ function getOrderProgressIndex(status: TrackingOrder["status"]) {
       return 1
     case "preparing":
       return 1
-    case "delivering":
+    case "ready_for_delivery":
       return 2
-    case "completed":
+    case "delivering":
       return 3
+    case "completed":
+      return 4
     case "canceled":
       return -1
     default:
       return 0
   }
+}
+
+function getCustomerProgressIndex(order: TrackingOrder) {
+  if (
+    order.status === "pending" &&
+    (order.payment_status === "confirmed" || order.payment_status === "transfer_submitted")
+  ) {
+    return 1
+  }
+
+  return getOrderProgressIndex(order.status)
+}
+
+function getCustomerDisplayStatusLabel(order: TrackingOrder) {
+  if (order.status === "pending" && order.payment_status === "confirmed") {
+    return "입금확인"
+  }
+
+  if (order.status === "pending" && order.payment_status === "transfer_submitted") {
+    return "입금확인 대기"
+  }
+
+  return orderStatusLabel(order.status)
+}
+
+function getCustomerDisplayStatusBadgeClass(order: TrackingOrder) {
+  if (order.status === "pending" && order.payment_status === "confirmed") {
+    return "bg-emerald-100 text-emerald-800 ring-emerald-200"
+  }
+
+  if (order.status === "pending" && order.payment_status === "transfer_submitted") {
+    return "bg-sky-100 text-sky-800 ring-sky-200"
+  }
+
+  return getOrderStatusBadgeClass(order.status)
+}
+
+function getCustomerGuideMessage(order: TrackingOrder) {
+  if (order.status === "canceled") {
+    return "주문이 취소되었습니다. 자세한 내용은 매장에 문의해 주세요."
+  }
+
+  if (order.status === "completed") {
+    return "배달이 완료되었습니다. 이용해 주셔서 감사합니다."
+  }
+
+  if (order.status === "delivering") {
+    return "배달중입니다. 조금만 기다려 주세요."
+  }
+
+  if (order.status === "ready_for_delivery") {
+    return "상품 준비가 완료되었습니다. 곧 배달을 시작합니다."
+  }
+
+  if (order.payment_status === "confirmed" || order.status === "payment_confirmed" || order.status === "preparing") {
+    return "입금이 확인되어 배달을 준비중입니다."
+  }
+
+  if (order.payment_status === "transfer_submitted") {
+    return "입금 확인을 기다리고 있습니다. 확인이 완료되면 배달을 준비합니다."
+  }
+
+  if (order.payment_status === "rejected") {
+    return "입금 확인에 문제가 있습니다. 매장에 문의해 주세요."
+  }
+
+  if (order.price_status === "quoted") {
+    return "가격이 확정되었습니다. 입금해 주세요. 입금이 확인되면 배달을 준비합니다."
+  }
+
+  return "가격이 확정되기를 기다리고 있습니다. 가격이 확정되면 입금해 주세요."
 }
 
 const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
@@ -130,6 +208,12 @@ export function TrackClient({
     initialOrder ? new Date(initialOrder.updated_at).getTime() : null
   )
   const [urlCopied, setUrlCopied] = useState(false)
+  const [accountCopied, setAccountCopied] = useState(false)
+  const [depositorName, setDepositorName] = useState("")
+  const [transferredAmount, setTransferredAmount] = useState(initialOrder?.total_amount ? String(initialOrder.total_amount) : "")
+  const [isSubmittingTransferReport, setIsSubmittingTransferReport] = useState(false)
+  const [transferReportMessage, setTransferReportMessage] = useState<string | null>(null)
+  const [transferReportError, setTransferReportError] = useState<string | null>(null)
 
   const fetchTracking = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false
@@ -176,6 +260,9 @@ export function TrackClient({
 
       setOrder(payload.order)
       setOrderItems(payload.items ?? [])
+      if (payload.order.price_status === "quoted" && payload.order.payment_status === "waiting_transfer") {
+        setTransferredAmount((current) => current || String(payload.order.total_amount))
+      }
       if (payload.bankInfo) {
         setBankInfo(payload.bankInfo)
       }
@@ -217,6 +304,64 @@ export function TrackClient({
       setTimeout(() => setUrlCopied(false), 1200)
     } catch {
       setUrlCopied(false)
+    }
+  }
+
+  async function copyBankAccountNumber() {
+    if (!bankInfo) {
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(bankInfo.bankAccountNumber)
+      setAccountCopied(true)
+      setTimeout(() => setAccountCopied(false), 1200)
+    } catch {
+      setAccountCopied(false)
+    }
+  }
+
+  async function submitTransferReport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!order) {
+      return
+    }
+
+    const amount = Number(transferredAmount.replace(/[^0-9]/g, ""))
+
+    setIsSubmittingTransferReport(true)
+    setTransferReportMessage(null)
+    setTransferReportError(null)
+
+    try {
+      const response = await fetch("/api/public/transfer-reports", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          orderCode: order.order_code,
+          customerPhone,
+          storeSlug,
+          depositorName,
+          transferredAmount: amount,
+        }),
+      })
+
+      const payload = (await response.json()) as { error?: string; message?: string }
+
+      if (!response.ok || payload.error) {
+        setTransferReportError(payload.error ?? "입금 신고에 실패했습니다.")
+        return
+      }
+
+      setTransferReportMessage(payload.message ?? "입금 신고가 접수되었습니다. 매장 확인을 기다려 주세요.")
+      void fetchTracking({ silent: true })
+    } catch {
+      setTransferReportError("네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
+    } finally {
+      setIsSubmittingTransferReport(false)
     }
   }
 
@@ -308,19 +453,149 @@ export function TrackClient({
 
       {order ? (
         <section className="mq-card space-y-3 p-5">
+          <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
+            <p className="text-xs font-semibold text-zinc-500">조회 결과</p>
+            <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-xl font-black text-zinc-950">
+                주문번호 {formatCustomerOrderCode(order.order_code)}
+              </h2>
+              <button
+                type="button"
+                onClick={() => void fetchTracking({ silent: true })}
+                disabled={isAutoRefreshing}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-zinc-100 px-3 text-xs font-bold text-zinc-700 hover:bg-zinc-200 disabled:cursor-not-allowed disabled:text-zinc-400"
+              >
+                <Icon
+                  icon={refreshIcon}
+                  className={`h-4 w-4 ${isAutoRefreshing ? "animate-spin" : ""}`}
+                  aria-hidden="true"
+                />
+                {isAutoRefreshing ? "새로고침 중..." : "새로고침"}
+              </button>
+            </div>
+          </div>
+
+          {order.price_status === "needs_review" && order.status !== "canceled" ? (
+            <div className="rounded-2xl border-2 border-brand bg-brand-soft p-5 text-zinc-900 shadow-sm">
+              <p className="text-sm font-bold text-brand-strong">지금 할 일</p>
+              <h2 className="mt-1 text-2xl font-black">최종 금액이 확정되기를 기다려주세요</h2>
+              <p className="mt-3 text-sm font-medium leading-6 text-zinc-700">
+                매장에서 상품 가격과 배달비를 확인한 뒤 확정 금액을 안내합니다.
+              </p>
+            </div>
+          ) : null}
+
+          {bankInfo && order.price_status === "quoted" && order.payment_status === "waiting_transfer" ? (
+            <div className="rounded-2xl border-2 border-brand bg-brand-soft p-5 text-zinc-900 shadow-sm">
+              <p className="text-sm font-bold text-brand-strong">지금 할 일</p>
+              <h2 className="mt-1 text-2xl font-black">확정 금액을 입금해 주세요</h2>
+              <div className="mt-4 rounded-xl bg-white p-4 ring-1 ring-brand-border">
+                <p className="text-xs font-semibold text-zinc-500">입금할 금액</p>
+                <p className="mt-1 text-4xl font-black tracking-normal text-zinc-950">
+                  {formatKrw(order.total_amount)}
+                </p>
+              </div>
+              <div className="mt-3 grid gap-2 rounded-xl bg-white p-4 text-sm ring-1 ring-brand-border">
+                <p className="font-bold text-zinc-900">{bankInfo.name} 계좌</p>
+                <p>
+                  {bankInfo.bankName} <span className="font-extrabold text-zinc-950">{bankInfo.bankAccountNumber}</span>
+                </p>
+                <p>예금주: {bankInfo.bankAccountHolder}</p>
+                <button
+                  type="button"
+                  onClick={() => void copyBankAccountNumber()}
+                  className="mt-1 h-10 rounded-lg bg-brand px-3 text-sm font-bold text-white hover:bg-brand-strong"
+                >
+                  {accountCopied ? "계좌번호 복사됨" : "계좌번호 복사"}
+                </button>
+              </div>
+              <p className="mt-3 text-sm font-medium leading-6 text-zinc-700">
+                입금 후 매장에서 확인하면 상품 준비가 시작됩니다.
+              </p>
+              <form onSubmit={(event) => void submitTransferReport(event)} className="mt-4 grid gap-3 rounded-xl bg-white p-4 ring-1 ring-brand-border">
+                <div className="grid gap-1 text-sm">
+                  <label htmlFor="depositor-name" className="font-bold text-zinc-900">
+                    입금자명
+                  </label>
+                  <input
+                    id="depositor-name"
+                    value={depositorName}
+                    onChange={(event) => setDepositorName(event.target.value)}
+                    className="mq-input"
+                    placeholder="예: 홍길동"
+                    required
+                  />
+                </div>
+                <div className="grid gap-1 text-sm">
+                  <label htmlFor="transferred-amount" className="font-bold text-zinc-900">
+                    입금액
+                  </label>
+                  <input
+                    id="transferred-amount"
+                    value={transferredAmount}
+                    onChange={(event) => setTransferredAmount(event.target.value.replace(/[^0-9]/g, ""))}
+                    className="mq-input"
+                    inputMode="numeric"
+                    placeholder={String(order.total_amount)}
+                    required
+                  />
+                </div>
+                {transferReportError ? (
+                  <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+                    {transferReportError}
+                  </p>
+                ) : null}
+                {transferReportMessage ? (
+                  <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
+                    {transferReportMessage}
+                  </p>
+                ) : null}
+                <button
+                  type="submit"
+                  disabled={isSubmittingTransferReport}
+                  className="h-11 rounded-lg bg-zinc-950 px-4 text-sm font-black text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
+                >
+                  {isSubmittingTransferReport ? "신고 중..." : "입금신고하기"}
+                </button>
+              </form>
+            </div>
+          ) : null}
+
+          {order.price_status === "quoted" && order.payment_status === "transfer_submitted" ? (
+            <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
+              <p className="font-bold">입금 확인을 기다리고 있습니다.</p>
+              <p className="mt-1">매장에서 입금을 확인하면 상품 준비가 시작됩니다.</p>
+            </div>
+          ) : null}
+
+          {bankInfo && order.price_status === "quoted" && order.payment_status === "rejected" ? (
+            <div className="rounded-2xl border-2 border-rose-200 bg-rose-50 p-5 text-zinc-900">
+              <p className="text-sm font-bold text-rose-700">입금 확인에 문제가 있습니다</p>
+              <h2 className="mt-1 text-xl font-black">금액과 계좌를 다시 확인해 주세요</h2>
+              <div className="mt-3 rounded-xl bg-white p-4 text-sm ring-1 ring-rose-100">
+                <p>입금할 금액: <strong>{formatKrw(order.total_amount)}</strong></p>
+                <p className="mt-1">
+                  {bankInfo.bankName} <strong>{bankInfo.bankAccountNumber}</strong>
+                </p>
+                <p>예금주: {bankInfo.bankAccountHolder}</p>
+              </div>
+            </div>
+          ) : null}
+
           {(() => {
-            const progressIndex = getOrderProgressIndex(order.status)
+            const progressIndex = getCustomerProgressIndex(order)
             const isCanceled = order.status === "canceled"
+            const guideMessage = getCustomerGuideMessage(order)
 
             return (
-              <div className="rounded-xl border border-zinc-200 bg-white p-4">
+              <div className="rounded-xl border border-zinc-200 bg-white p-3">
                 <p className="text-sm font-semibold text-zinc-900">주문 진행 단계</p>
                 {isCanceled ? (
                   <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
                     주문이 취소되었습니다. 매장에 문의해 주세요.
                   </p>
                 ) : (
-                  <div className="mt-3 grid grid-cols-4 gap-2">
+                  <div className="mt-3 grid grid-cols-5 gap-1.5">
                     {ORDER_PROGRESS_STEPS.map((step, index) => {
                       const isActive = index <= progressIndex
                       const isCurrent = index === progressIndex
@@ -346,6 +621,9 @@ export function TrackClient({
                     })}
                   </div>
                 )}
+                <p className="mt-3 rounded-lg bg-zinc-50 px-3 py-2 text-sm font-medium text-zinc-700">
+                  {guideMessage}
+                </p>
               </div>
             )
           })()}
@@ -359,31 +637,21 @@ export function TrackClient({
             {urlCopied ? "링크 복사됨" : "현재 조회링크 복사"}
           </button>
           <div className="rounded-xl border border-brand-border bg-brand-soft p-4">
-            <p className="text-xs font-medium text-brand-strong">현재 주문 상태</p>
+            <p className="text-xs font-medium text-brand-strong">현재 진행 상태</p>
             <p
-              className={`mt-2 inline-flex rounded-full px-4 py-2 text-2xl font-extrabold ring-1 ${getOrderStatusBadgeClass(order.status)}`}
+              className={`mt-2 inline-flex rounded-full px-3 py-1.5 text-lg font-extrabold ring-1 ${getCustomerDisplayStatusBadgeClass(order)}`}
             >
-              {orderStatusLabel(order.status)}
+              {getCustomerDisplayStatusLabel(order)}
             </p>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div className="rounded-lg border border-zinc-200 p-3">
-              <p className="text-xs text-zinc-500">결제 상태</p>
-              <p
-                className={`mt-1 inline-flex rounded-full px-3 py-1 text-base font-bold ring-1 ${getPaymentStatusBadgeClass(order.payment_status)}`}
-              >
-                {paymentStatusLabel(order.payment_status)}
-              </p>
-            </div>
-            <div className="rounded-lg border border-zinc-200 p-3">
-              <p className="text-xs text-zinc-500">가격 상태</p>
-              <p
-                className={`mt-1 inline-flex rounded-full px-3 py-1 text-base font-bold ring-1 ${getPriceStatusBadgeClass(order.price_status)}`}
-              >
-                {priceStatusLabel(order.price_status)}
-              </p>
-            </div>
+          <div className="flex flex-wrap gap-2 text-xs">
+            <span className={`rounded-full px-3 py-1 font-semibold ring-1 ${getPaymentStatusBadgeClass(order.payment_status)}`}>
+              결제 {paymentStatusLabel(order.payment_status)}
+            </span>
+            <span className={`rounded-full px-3 py-1 font-semibold ring-1 ${getPriceStatusBadgeClass(order.price_status)}`}>
+              가격 {priceStatusLabel(order.price_status)}
+            </span>
           </div>
 
           <div className="grid gap-2 text-sm text-zinc-700">
@@ -414,12 +682,6 @@ export function TrackClient({
             </div>
           ) : null}
 
-          {order.price_status === "quoted" ? (
-            <div className="rounded-lg border border-brand-border bg-brand-soft px-3 py-3 text-sm text-brand-strong">
-              가격확정이 완료되었습니다. 계좌로 입금해주시면, 입금 확인 후 상품이 준비됩니다.
-            </div>
-          ) : null}
-
           {orderItems.length > 0 ? (
             <div className="rounded-lg border border-zinc-200 p-3">
               <p className="text-sm font-semibold text-zinc-900">확정 상품 가격</p>
@@ -434,14 +696,6 @@ export function TrackClient({
             </div>
           ) : null}
 
-          {bankInfo && order.price_status === "quoted" ? (
-            <div className="rounded-lg border border-brand-border bg-brand-soft px-3 py-3 text-sm text-brand-strong">
-              <p className="font-semibold">{bankInfo.name} 입금 계좌</p>
-              <p className="mt-1">{bankInfo.bankName}</p>
-              <p>{bankInfo.bankAccountNumber}</p>
-              <p>예금주: {bankInfo.bankAccountHolder}</p>
-            </div>
-          ) : null}
         </section>
       ) : null}
     </main>

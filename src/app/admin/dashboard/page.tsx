@@ -74,12 +74,14 @@ export default async function AdminDashboardPage(props: PageProps<"/admin/dashbo
   ])
   const ordersLinks = {
     all: buildOrdersHref(selectedStore.slug, {}),
-    ownerView: buildOrdersHref(selectedStore.slug, { view: "owner" }),
+    quoteView: buildOrdersHref(selectedStore.slug, { view: "quote" }),
+    paymentView: buildOrdersHref(selectedStore.slug, { view: "payment" }),
     prepView: buildOrdersHref(selectedStore.slug, { view: "prep" }),
     deliveryView: buildOrdersHref(selectedStore.slug, { view: "delivery" }),
     needsReview: buildOrdersHref(selectedStore.slug, { price: "needs_review" }),
     waitingTransfer: buildOrdersHref(selectedStore.slug, { payment: "waiting_transfer" }),
     transferSubmitted: buildOrdersHref(selectedStore.slug, { payment: "transfer_submitted" }),
+    readyForDelivery: buildOrdersHref(selectedStore.slug, { status: "ready_for_delivery" }),
     delivering: buildOrdersHref(selectedStore.slug, { status: "delivering" }),
     completed: buildOrdersHref(selectedStore.slug, { status: "completed" }),
     canceled: buildOrdersHref(selectedStore.slug, { status: "canceled" }),
@@ -169,19 +171,29 @@ export default async function AdminDashboardPage(props: PageProps<"/admin/dashbo
       <section className="mq-card p-4">
         <h2 className="text-lg font-semibold text-zinc-900">역할별 빠른 이동</h2>
         <p className="mt-1 text-xs text-zinc-600">담당자별 주문 보드로 바로 이동해서 필요한 액션만 처리할 수 있습니다.</p>
-        <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-5">
           <Link href={ordersLinks.all} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 hover:bg-zinc-50">
             <p className="text-sm font-semibold text-zinc-900">{ORDER_WORK_VIEW_META.all.label}</p>
             <p className="mt-0.5 text-xs text-zinc-500">{ORDER_WORK_VIEW_META.all.description}</p>
           </Link>
           <Link
-            href={ordersLinks.ownerView}
+            href={ordersLinks.quoteView}
             className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 hover:bg-amber-100/70"
           >
-            <p className="text-sm font-semibold text-amber-900">{ORDER_WORK_VIEW_META.owner.label}</p>
-            <p className="mt-0.5 text-xs text-amber-800">{ORDER_WORK_VIEW_META.owner.description}</p>
+            <p className="text-sm font-semibold text-amber-900">{ORDER_WORK_VIEW_META.quote.label}</p>
+            <p className="mt-0.5 text-xs text-amber-800">{ORDER_WORK_VIEW_META.quote.description}</p>
             <p className="mt-1 text-xs font-medium text-amber-900">
-              처리대기 {roleQueueCounts.ownerPendingCount}건
+              가격확정대기 {roleQueueCounts.quotePendingCount}건
+            </p>
+          </Link>
+          <Link
+            href={ordersLinks.paymentView}
+            className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 hover:bg-violet-100/70"
+          >
+            <p className="text-sm font-semibold text-violet-900">{ORDER_WORK_VIEW_META.payment.label}</p>
+            <p className="mt-0.5 text-xs text-violet-800">{ORDER_WORK_VIEW_META.payment.description}</p>
+            <p className="mt-1 text-xs font-medium text-violet-900">
+              입금확인대기 {roleQueueCounts.paymentPendingCount}건
             </p>
           </Link>
           <Link
@@ -201,7 +213,7 @@ export default async function AdminDashboardPage(props: PageProps<"/admin/dashbo
             <p className="text-sm font-semibold text-emerald-900">{ORDER_WORK_VIEW_META.delivery.label}</p>
             <p className="mt-0.5 text-xs text-emerald-800">{ORDER_WORK_VIEW_META.delivery.description}</p>
             <p className="mt-1 text-xs font-medium text-emerald-900">
-              배달중 {roleQueueCounts.deliveringCount}건
+              배달대기 {roleQueueCounts.deliveryReadyCount}건
             </p>
           </Link>
         </div>
@@ -237,6 +249,9 @@ export default async function AdminDashboardPage(props: PageProps<"/admin/dashbo
             </Link>
             <Link href={ordersLinks.transferSubmitted} className="rounded-lg bg-brand-soft px-3 py-2 text-brand-strong hover:bg-brand-border">
               입금 신고된 주문 보기
+            </Link>
+            <Link href={ordersLinks.readyForDelivery} className="rounded-lg bg-brand-soft px-3 py-2 text-brand-strong hover:bg-brand-border">
+              준비완료 주문 보기 ({roleQueueCounts.deliveryReadyCount}건)
             </Link>
             <Link href={ordersLinks.delivering} className="rounded-lg bg-brand-soft px-3 py-2 text-brand-strong hover:bg-brand-border">
               배달중 주문 보기

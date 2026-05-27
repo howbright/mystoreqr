@@ -62,6 +62,7 @@ export type PublicStore = Pick<
   | "slug"
   | "name"
   | "description"
+  | "order_policy"
   | "phone"
   | "delivery_fee"
   | "min_order_amount"
@@ -108,7 +109,7 @@ export const getPublicStoreBySlug = cache(async (slug: string): Promise<PublicSt
   const { data: store, error: storeError } = await supabase
     .from("stores")
     .select(
-      "id, slug, name, description, phone, delivery_fee, min_order_amount, address_road, address_detail, delivery_enabled, pickup_enabled, bank_name, bank_account_number, bank_account_holder"
+      "id, slug, name, description, order_policy, phone, delivery_fee, min_order_amount, address_road, address_detail, delivery_enabled, pickup_enabled, bank_name, bank_account_number, bank_account_holder"
     )
     .eq("slug", normalizedSlug)
     .eq("is_active", true)

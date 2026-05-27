@@ -29,6 +29,7 @@ begin
     'pending',
     'payment_confirmed',
     'preparing',
+    'ready_for_delivery',
     'delivering',
     'completed',
     'canceled'
@@ -103,6 +104,7 @@ create table public.stores (
   name text not null,
   phone text,
   description text,
+  order_policy text,
   bank_name text not null,
   bank_account_number text not null,
   bank_account_holder text not null,

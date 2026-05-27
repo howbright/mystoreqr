@@ -8,6 +8,7 @@ const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   pending: "접수",
   payment_confirmed: "결제확인",
   preparing: "준비중",
+  ready_for_delivery: "준비완료",
   delivering: "배달중",
   completed: "배달완료",
   canceled: "취소",
