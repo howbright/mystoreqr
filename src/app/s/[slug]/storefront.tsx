@@ -558,14 +558,53 @@ export function Storefront({ storeBundle }: StorefrontProps) {
                   선택 {selectedProductCount}종 / 총 {selectedQuantityTotal}개
                 </p>
                 {selectedItems.map((item) => (
-                  <div key={item.product.id} className="flex items-start justify-between gap-2">
+                  <div key={item.product.id} className="grid gap-2 rounded-lg border border-zinc-100 p-2">
                     <div>
                       <p className="font-medium text-zinc-800">{item.product.name}</p>
-                      <p className="text-zinc-500">{item.quantity}개</p>
+                      <p className="text-zinc-500">
+                        {formatKrw(item.product.price)}
+                        {item.product.unit ? ` / ${item.product.unit}` : ""}
+                      </p>
                     </div>
-                    <p className={`font-semibold ${item.lineTotal == null ? "text-amber-700" : "text-zinc-900"}`}>
-                      {formatKrw(item.lineTotal)}
-                    </p>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
+                          className="h-8 w-8 rounded-full border border-zinc-300 text-sm font-bold text-brand-strong"
+                        >
+                          -
+                        </button>
+                        <input
+                          type="number"
+                          min={0}
+                          value={item.quantity}
+                          onChange={(event) => updateQuantity(item.product.id, Number(event.target.value) || 0)}
+                          className="h-8 w-14 rounded-md border border-zinc-300 px-2 text-center text-sm focus:border-brand focus:outline-none"
+                          aria-label={`${item.product.name} 수량`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
+                          className="h-8 w-8 rounded-full border border-zinc-300 text-sm font-bold text-brand-strong"
+                        >
+                          +
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => updateQuantity(item.product.id, 0)}
+                        className="rounded-md px-2 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 border-t border-zinc-100 pt-2">
+                      <span className="text-xs text-zinc-500">상품 합계</span>
+                      <p className={`font-semibold ${item.lineTotal == null ? "text-amber-700" : "text-zinc-900"}`}>
+                        {formatKrw(item.lineTotal)}
+                      </p>
+                    </div>
                   </div>
                 ))}
                 <div className="border-t border-zinc-200 pt-2">
