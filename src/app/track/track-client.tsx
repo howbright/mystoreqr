@@ -214,6 +214,9 @@ export function TrackClient({
   const [isSubmittingTransferReport, setIsSubmittingTransferReport] = useState(false)
   const [transferReportMessage, setTransferReportMessage] = useState<string | null>(null)
   const [transferReportError, setTransferReportError] = useState<string | null>(null)
+  const [isCancelingOrder, setIsCancelingOrder] = useState(false)
+  const [cancelMessage, setCancelMessage] = useState<string | null>(null)
+  const [cancelError, setCancelError] = useState<string | null>(null)
 
   const fetchTracking = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false
@@ -365,6 +368,49 @@ export function TrackClient({
     }
   }
 
+  async function cancelOrder() {
+    if (!order) {
+      return
+    }
+
+    const confirmed = window.confirm("아직 가격이 확정되기 전이라 주문을 취소할 수 있습니다. 정말 취소할까요?")
+    if (!confirmed) {
+      return
+    }
+
+    setIsCancelingOrder(true)
+    setCancelMessage(null)
+    setCancelError(null)
+
+    try {
+      const response = await fetch("/api/public/orders/cancel", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          orderCode: order.order_code,
+          customerPhone,
+          storeSlug,
+        }),
+      })
+
+      const payload = (await response.json()) as { error?: string; message?: string }
+
+      if (!response.ok || payload.error) {
+        setCancelError(payload.error ?? "주문 취소에 실패했습니다.")
+        return
+      }
+
+      setCancelMessage(payload.message ?? "주문이 취소되었습니다.")
+      void fetchTracking({ silent: true })
+    } catch {
+      setCancelError("네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
+    } finally {
+      setIsCancelingOrder(false)
+    }
+  }
+
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-6 md:px-6">
       <header className="mq-card p-5">
@@ -482,6 +528,32 @@ export function TrackClient({
               <p className="mt-3 text-sm font-medium leading-6 text-zinc-700">
                 매장에서 상품 가격과 배달비를 확인한 뒤 확정 금액을 안내합니다.
               </p>
+              {order.status === "pending" && order.payment_status === "not_ready" ? (
+                <div className="mt-4 rounded-xl bg-white p-4 ring-1 ring-brand-border">
+                  <p className="text-sm font-semibold text-zinc-900">주문을 잘못 접수했나요?</p>
+                  <p className="mt-1 text-xs leading-5 text-zinc-600">
+                    가격이 확정되기 전에는 직접 주문을 취소할 수 있습니다.
+                  </p>
+                  {cancelError ? (
+                    <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+                      {cancelError}
+                    </p>
+                  ) : null}
+                  {cancelMessage ? (
+                    <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
+                      {cancelMessage}
+                    </p>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => void cancelOrder()}
+                    disabled={isCancelingOrder}
+                    className="mt-3 h-10 rounded-lg border border-rose-200 px-3 text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isCancelingOrder ? "취소 중..." : "주문 취소하기"}
+                  </button>
+                </div>
+              ) : null}
             </div>
           ) : null}
 
