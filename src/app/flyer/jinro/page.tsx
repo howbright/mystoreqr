@@ -114,7 +114,7 @@ export default function JinroFlyerPage() {
           </p>
           <div className="mt-2 grid grid-cols-2 gap-2">
             {adminViews.map((view) => (
-              <p key={view} className="rounded-xl bg-white px-3 py-1.5 text-xs font-black text-brand-strong">
+              <p key={view} className="rounded-xl bg-white px-3 py-1.5 text-xs font-black text-zinc-950">
                 {view}
               </p>
             ))}
@@ -125,7 +125,9 @@ export default function JinroFlyerPage() {
           <div>
             <p className="text-sm font-black text-zinc-950">오른쪽 QR로 바로 고객 입장에서 체험해보실 수 있습니다</p>
             <p className="mt-2 text-base font-black text-brand-strong">
-              관심 있으시면 전화주세요. 이나현 010-6380-8672
+              관심 있으시면 전화주세요.
+              <br />
+              이나현 010-6380-8672
             </p>
           </div>
           <div className="shrink-0 rounded-xl bg-white p-2">
