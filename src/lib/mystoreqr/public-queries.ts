@@ -52,8 +52,27 @@ type OrderStoreInfoRow = {
     | null
 }
 
+type TokenOrderTrackingRow = PublicOrderTrackingRow & {
+  lookup_token: string
+}
+
 function isUuidLike(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+}
+
+function mapOrderTracking(row: PublicOrderTrackingRow): PublicOrderTracking {
+  return {
+    order_code: row.order_code,
+    status: row.status,
+    payment_status: row.payment_status,
+    price_status: row.price_status,
+    price_note: row.price_note ?? "",
+    subtotal_amount: row.subtotal_amount,
+    delivery_fee: row.delivery_fee,
+    total_amount: row.total_amount,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  } as PublicOrderTracking
 }
 
 export type PublicStore = Pick<
@@ -161,30 +180,38 @@ export const getPublicStoreBySlug = cache(async (slug: string): Promise<PublicSt
 
 export async function getOrderTrackingByToken(
   lookupToken: string,
-  customerPhone: string
+  customerPhone?: string
 ): Promise<PublicOrderTracking | null> {
   const token = lookupToken.trim()
-  const phone = normalizePhone(customerPhone)
+  const phone = normalizePhone(customerPhone ?? "")
 
-  if (!token || !isUuidLike(token) || phone.length < 10) {
+  if (!token || !isUuidLike(token)) {
     return null
   }
 
-  const supabase = await createClient()
-  const { data, error } = await supabase.rpc("get_order_tracking_v2", {
-    p_lookup_token: token,
-    p_customer_phone: phone,
-  })
+  const supabase = createAdminClient()
+  const { data, error } = await supabase
+    .from("orders")
+    .select(
+      "lookup_token, order_code, status, payment_status, price_status, price_note, subtotal_amount, delivery_fee, total_amount, created_at, updated_at, customer_phone"
+    )
+    .eq("lookup_token", token)
+    .maybeSingle()
 
   if (error) {
     throw new Error(`주문 조회 실패: ${error.message}`)
   }
 
-  if (!data || data.length === 0) {
+  if (!data) {
     return null
   }
 
-  return data[0]
+  const order = data as TokenOrderTrackingRow
+  if (phone.length >= 10 && normalizePhone(order.customer_phone) !== phone) {
+    return null
+  }
+
+  return mapOrderTracking(order)
 }
 
 export async function getOrderTrackingByOrderCode(
@@ -234,28 +261,17 @@ export async function getOrderTrackingByOrderCode(
     return null
   }
 
-  return {
-    order_code: order.order_code,
-    status: order.status,
-    payment_status: order.payment_status,
-    price_status: order.price_status,
-    price_note: order.price_note ?? "",
-    subtotal_amount: order.subtotal_amount,
-    delivery_fee: order.delivery_fee,
-    total_amount: order.total_amount,
-    created_at: order.created_at,
-    updated_at: order.updated_at,
-  } as PublicOrderTracking
+  return mapOrderTracking(order)
 }
 
 export async function getOrderTrackingItemsByToken(
   lookupToken: string,
-  customerPhone: string
+  customerPhone?: string
 ): Promise<PublicTrackingItem[]> {
   const token = lookupToken.trim()
-  const phone = normalizePhone(customerPhone)
+  const phone = normalizePhone(customerPhone ?? "")
 
-  if (!token || !isUuidLike(token) || phone.length < 10) {
+  if (!token || !isUuidLike(token)) {
     return []
   }
 
@@ -274,7 +290,7 @@ export async function getOrderTrackingItemsByToken(
     return []
   }
 
-  if (normalizePhone(order.customer_phone) !== phone) {
+  if (phone.length >= 10 && normalizePhone(order.customer_phone) !== phone) {
     return []
   }
 
@@ -371,12 +387,12 @@ function mapStoreInfo(row: OrderStoreInfoRow | null | undefined): PublicTracking
 
 export async function getOrderTrackingStoreInfoByToken(
   lookupToken: string,
-  customerPhone: string
+  customerPhone?: string
 ): Promise<PublicTrackingStoreInfo | null> {
   const token = lookupToken.trim()
-  const phone = normalizePhone(customerPhone)
+  const phone = normalizePhone(customerPhone ?? "")
 
-  if (!token || !isUuidLike(token) || phone.length < 10) {
+  if (!token || !isUuidLike(token)) {
     return null
   }
 
@@ -393,7 +409,7 @@ export async function getOrderTrackingStoreInfoByToken(
     throw new Error(`주문 매장 조회 실패: ${error.message}`)
   }
 
-  if (!order || normalizePhone(order.customer_phone) !== phone) {
+  if (!order || (phone.length >= 10 && normalizePhone(order.customer_phone) !== phone)) {
     return null
   }
 

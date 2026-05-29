@@ -23,13 +23,13 @@ export default async function TrackPage(props: PageProps<"/track">) {
   const initialPhone = firstString(searchParams.phone) ?? ""
   const initialStoreSlug = firstString(searchParams.store)?.trim().toLowerCase() ?? ""
   const initialOrder =
-    initialLookupToken && initialPhone
+    initialLookupToken
       ? await getOrderTrackingByToken(initialLookupToken, initialPhone)
       : initialOrderCode && initialPhone
         ? await getOrderTrackingByOrderCode(initialOrderCode, initialPhone, initialStoreSlug)
       : null
   const initialItems =
-    initialLookupToken && initialPhone
+    initialLookupToken
       ? await getOrderTrackingItemsByToken(initialLookupToken, initialPhone)
       : initialOrderCode && initialPhone
         ? await getOrderTrackingItemsByOrderCode(initialOrderCode, initialPhone, initialStoreSlug)

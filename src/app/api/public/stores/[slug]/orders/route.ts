@@ -288,7 +288,7 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
     )
   }
 
-  const trackingPath = `/track?token=${encodeURIComponent(insertedOrder.lookup_token)}&phone=${encodeURIComponent(validatedOrderInput.customerPhone)}&store=${encodeURIComponent(store.slug)}`
+  const trackingPath = `/track?token=${encodeURIComponent(insertedOrder.lookup_token)}&store=${encodeURIComponent(store.slug)}`
   const appBaseUrl = getAppBaseUrl(request)
   const adminOrdersUrl = `${appBaseUrl}/admin/orders?store=${encodeURIComponent(store.slug)}&view=quote&summary=pending`
   const trackingUrl = `${appBaseUrl}${trackingPath}`

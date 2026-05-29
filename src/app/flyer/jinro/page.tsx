@@ -100,7 +100,7 @@ export default function JinroFlyerPage() {
 
         <div className="mt-auto flex items-center justify-between gap-5 rounded-2xl border-2 border-zinc-950 p-4">
           <div>
-            <p className="text-lg font-black text-zinc-950">아래 QR로 바로 고객 입장에서 체험해보실 수 있습니다</p>
+            <p className="text-lg font-black text-zinc-950">오른쪽 QR로 바로 고객 입장에서 체험해보실 수 있습니다</p>
             <p className="mt-3 text-base font-black text-brand-strong">
               관심 있으시면 전화주세요. 이나현 010-6380-8672
             </p>

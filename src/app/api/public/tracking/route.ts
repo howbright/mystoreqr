@@ -13,7 +13,7 @@ import {
 type TrackingBody = {
   lookupToken?: string
   orderCode?: string
-  customerPhone: string
+  customerPhone?: string
   storeSlug?: string
 }
 
@@ -28,7 +28,7 @@ function isValidTrackingPayload(body: unknown): body is TrackingBody {
 
   const value = body as Record<string, unknown>
   return (
-    typeof value.customerPhone === "string" &&
+    (typeof value.customerPhone === "string" || value.customerPhone === undefined) &&
     (typeof value.lookupToken === "string" || typeof value.orderCode === "string")
   )
 }
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
       : null
 
   const tracking = orderCode
-    ? await getOrderTrackingByOrderCode(orderCode, payload.customerPhone, storeSlug ?? undefined)
+    ? await getOrderTrackingByOrderCode(orderCode, payload.customerPhone ?? "", storeSlug ?? undefined)
     : lookupToken
       ? await getOrderTrackingByToken(lookupToken, payload.customerPhone)
       : null
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     return errorResponse("주문을 찾을 수 없습니다. 주문번호/연락처를 다시 확인해 주세요.", 404)
   }
   const trackingItems = orderCode
-    ? await getOrderTrackingItemsByOrderCode(orderCode, payload.customerPhone, storeSlug ?? undefined)
+    ? await getOrderTrackingItemsByOrderCode(orderCode, payload.customerPhone ?? "", storeSlug ?? undefined)
     : lookupToken
       ? await getOrderTrackingItemsByToken(lookupToken, payload.customerPhone)
       : []
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
       }
     }
   } else if (orderCode) {
-    bankInfo = await getOrderTrackingStoreInfoByOrderCode(orderCode, payload.customerPhone)
+    bankInfo = await getOrderTrackingStoreInfoByOrderCode(orderCode, payload.customerPhone ?? "")
   } else if (lookupToken) {
     bankInfo = await getOrderTrackingStoreInfoByToken(lookupToken, payload.customerPhone)
   }

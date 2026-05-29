@@ -291,7 +291,7 @@ export function TrackClient({
       return
     }
 
-    if ((!lookupToken.trim() && !orderCode.trim()) || !customerPhone.trim()) {
+    if (!lookupToken.trim() && (!orderCode.trim() || !customerPhone.trim())) {
       return
     }
 

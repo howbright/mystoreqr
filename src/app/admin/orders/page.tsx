@@ -709,13 +709,15 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                     ? "입금확인담당 상태 처리"
                   : "주문 상태 빠른 변경"
           const priorityMeta = getOrderPriorityMeta(order)
-          const trackingPath = `/track?token=${encodeURIComponent(order.lookup_token)}&phone=${encodeURIComponent(order.customer_phone)}&store=${encodeURIComponent(selectedStore.slug)}`
+          const trackingPath = `/track?token=${encodeURIComponent(order.lookup_token)}&store=${encodeURIComponent(selectedStore.slug)}`
           const trackingUrl = `${appBaseUrl}${trackingPath}`
           const customerGuideText = [
             `${order.customer_name}님, ${selectedStore.name}입니다.`,
             `주문번호: ${order.order_code}`,
             `확정 금액: ${formatKrw(order.total_amount)}`,
             `입금 계좌: ${selectedStore.bank_name} ${selectedStore.bank_account_number} (예금주 ${selectedStore.bank_account_holder})`,
+            "위 계좌로 입금해 주세요.",
+            "입금이 확인되면 상품을 준비하겠습니다.",
             `주문 조회: ${trackingUrl}`,
             "감사합니다.",
           ].join("\n")
@@ -727,6 +729,9 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
             "입금계좌:",
             `${selectedStore.bank_name} ${selectedStore.bank_account_number}`,
             `예금주: ${selectedStore.bank_account_holder}`,
+            "",
+            "위 계좌로 입금해 주세요.",
+            "입금이 확인되면 상품을 준비하겠습니다.",
             "",
             `주문조회: ${trackingUrl}`,
           ].join("\n")
