@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 
-import { normalizePhone } from "@/lib/mystoreqr/format"
+import { formatKrw, formatPhone, normalizePhone } from "@/lib/mystoreqr/format"
 import { checkRateLimit, getRequestIp } from "@/lib/mystoreqr/rate-limit"
+import { sendTelegramMessage } from "@/lib/mystoreqr/telegram"
 import { parsePositiveQuantity, validatePublicOrderInput } from "@/lib/mystoreqr/validation"
 import { createClient } from "@/lib/supabase/server"
 import type { TablesInsert } from "@/types/database.type"
@@ -59,6 +60,16 @@ function parseClientSubmittedAt(value: unknown) {
   }
 
   return timestamp
+}
+
+function getAppBaseUrl(request: Request) {
+  const envBaseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim()
+  if (envBaseUrl && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(envBaseUrl)) {
+    return envBaseUrl.replace(/\/$/, "")
+  }
+
+  const requestUrl = new URL(request.url)
+  return requestUrl.origin
 }
 
 export async function POST(request: Request, context: { params: Promise<{ slug: string }> }) {
@@ -163,7 +174,7 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
   const supabase = await createClient()
   const { data: store, error: storeError } = await supabase
     .from("stores")
-    .select("id, slug, delivery_enabled, pickup_enabled, is_active, min_order_amount")
+    .select("id, slug, name, delivery_enabled, pickup_enabled, is_active, min_order_amount")
     .eq("slug", normalizedSlug)
     .eq("is_active", true)
     .maybeSingle()
@@ -278,6 +289,36 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
   }
 
   const trackingPath = `/track?token=${encodeURIComponent(insertedOrder.lookup_token)}&phone=${encodeURIComponent(validatedOrderInput.customerPhone)}&store=${encodeURIComponent(store.slug)}`
+  const appBaseUrl = getAppBaseUrl(request)
+  const adminOrdersUrl = `${appBaseUrl}/admin/orders?store=${encodeURIComponent(store.slug)}&view=quote&summary=pending`
+  const trackingUrl = `${appBaseUrl}${trackingPath}`
+  const itemLines = orderItemsInsert.map((item) => {
+    const lineTotal = item.unit_price == null ? null : item.unit_price * item.quantity
+    return `- ${item.product_name} ${item.quantity}개 / ${formatKrw(lineTotal)}`
+  })
+  const telegramResult = await sendTelegramMessage(
+    [
+      "새 주문이 접수되었습니다.",
+      "",
+      `${store.name} / 주문번호 ${insertedOrder.order_code}`,
+      `고객: ${validatedOrderInput.customerName} / ${formatPhone(validatedOrderInput.customerPhone)}`,
+      `수령: ${validatedOrderInput.fulfillmentType === "delivery" ? "배달" : "픽업"}`,
+      validatedOrderInput.deliveryAddress ? `주소: ${validatedOrderInput.deliveryAddress}${validatedOrderInput.deliveryAddressDetail ? ` ${validatedOrderInput.deliveryAddressDetail}` : ""}` : null,
+      validatedOrderInput.customerNote ? `요청사항: ${validatedOrderInput.customerNote}` : null,
+      "",
+      "상품:",
+      ...itemLines,
+      "",
+      `가격확정 바로가기: ${adminOrdersUrl}`,
+      `고객 추적 페이지: ${trackingUrl}`,
+    ]
+      .filter(Boolean)
+      .join("\n")
+  )
+
+  if (!telegramResult.ok) {
+    console.error(`Telegram new order notification failed: ${telegramResult.reason}`)
+  }
 
   return NextResponse.json(
     {

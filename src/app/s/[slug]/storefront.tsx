@@ -423,58 +423,67 @@ export function Storefront({ storeBundle }: StorefrontProps) {
                     return (
                       <div
                         key={product.id}
-                        className="flex items-center justify-between rounded-xl border border-zinc-100 p-3"
+                        className="grid grid-cols-[4.75rem_minmax(0,1fr)] gap-3 rounded-xl border border-zinc-100 bg-white p-3 sm:grid-cols-[5.5rem_minmax(0,1fr)_auto] sm:items-center"
                       >
-                        <div className="flex min-w-0 items-center gap-3 pr-2">
-                          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-zinc-100">
-                            {product.image_url ? (
-                              <div
-                                className="h-full w-full bg-cover bg-center"
-                                style={{ backgroundImage: `url(${product.image_url})` }}
-                                role="img"
-                                aria-label={`${product.name} 상품 사진`}
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center text-[11px] font-medium text-zinc-400">
-                                사진
-                              </div>
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <p className="font-medium text-zinc-900">{product.name}</p>
-                              {discountRate ? (
-                                <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-bold text-rose-700">
-                                  {discountRate}% 할인
-                                </span>
-                              ) : null}
+                        <div className="aspect-square w-full overflow-hidden rounded-xl bg-zinc-100">
+                          {product.image_url ? (
+                            <div
+                              className="h-full w-full bg-cover bg-center"
+                              style={{ backgroundImage: `url(${product.image_url})` }}
+                              role="img"
+                              aria-label={`${product.name} 상품 사진`}
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-zinc-400">
+                              사진
                             </div>
-                            <div className="mt-0.5 flex flex-wrap items-baseline gap-1.5 text-sm">
-                              {discountRate ? (
-                                <span className="text-xs text-zinc-400 line-through">
-                                  {formatKrw(product.original_price)}
-                                </span>
-                              ) : null}
-                              <span className={discountRate ? "font-bold text-rose-700" : "text-zinc-600"}>
-                                {formatKrw(product.price)}
+                          )}
+                        </div>
+
+                        <div className="min-w-0 self-center">
+                          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                            <p className="min-w-0 break-words text-[15px] font-bold leading-snug text-zinc-900">
+                              {product.name}
+                            </p>
+                            {discountRate ? (
+                              <span className="shrink-0 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-bold text-rose-700">
+                                {discountRate}% 할인
                               </span>
-                              {product.unit ? <span className="text-zinc-500">/ {product.unit}</span> : null}
-                            </div>
+                            ) : null}
+                          </div>
+
+                          <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
+                            {discountRate ? (
+                              <span className="text-xs text-zinc-400 line-through">
+                                {formatKrw(product.original_price)}
+                              </span>
+                            ) : null}
+                            <span className={discountRate ? "font-black text-rose-700" : "font-bold text-zinc-800"}>
+                              {formatKrw(product.price)}
+                            </span>
+                            {product.unit ? <span className="text-xs font-medium text-zinc-500">/ {product.unit}</span> : null}
+                          </div>
                           {product.description ? (
-                            <p className="mt-1 text-xs text-zinc-500">{product.description}</p>
+                            <p className="mt-1 line-clamp-2 break-words text-xs leading-relaxed text-zinc-500">
+                              {product.description}
+                            </p>
                           ) : null}
                           {product.is_sold_out ? (
                             <p className="mt-1 text-xs font-semibold text-rose-600">품절</p>
                           ) : null}
-                          </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="col-span-2 flex items-center justify-between gap-3 rounded-xl bg-zinc-50 px-3 py-2 sm:col-span-1 sm:bg-transparent sm:px-0 sm:py-0">
+                          <p className={`text-xs font-bold ${quantity > 0 ? "text-brand-strong" : "text-zinc-500"}`}>
+                            {quantity > 0 ? `${quantity}개 담김` : "수량 선택"}
+                          </p>
+                          <div className="grid grid-cols-[2.25rem_3.25rem_2.25rem] items-center gap-1.5">
                           <button
                             type="button"
                             onClick={() => updateQuantity(product.id, quantity - 1)}
-                            className="h-8 w-8 rounded-full border border-zinc-300 text-sm font-bold text-brand-strong disabled:opacity-40"
+                            className="h-9 w-9 rounded-full border border-zinc-300 bg-white text-sm font-black text-brand-strong disabled:opacity-40"
                             disabled={quantity <= 0 || product.is_sold_out}
+                            aria-label={`${product.name} 수량 줄이기`}
                           >
                             -
                           </button>
@@ -483,17 +492,20 @@ export function Storefront({ storeBundle }: StorefrontProps) {
                             min={0}
                             value={quantity}
                             onChange={(event) => updateQuantity(product.id, Number(event.target.value) || 0)}
-                            className="h-8 w-14 rounded-md border border-zinc-300 px-2 text-center text-sm focus:border-brand focus:outline-none"
+                            className="h-9 w-full rounded-md border border-zinc-300 bg-white px-1 text-center text-sm font-bold focus:border-brand focus:outline-none"
                             disabled={product.is_sold_out}
+                            aria-label={`${product.name} 수량`}
                           />
                           <button
                             type="button"
                             onClick={() => updateQuantity(product.id, quantity + 1)}
-                            className="h-8 w-8 rounded-full border border-zinc-300 text-sm font-bold text-brand-strong disabled:opacity-40"
+                            className="h-9 w-9 rounded-full border border-zinc-300 bg-white text-sm font-black text-brand-strong disabled:opacity-40"
                             disabled={product.is_sold_out}
+                            aria-label={`${product.name} 수량 늘리기`}
                           >
                             +
                           </button>
+                          </div>
                         </div>
                       </div>
                     )
