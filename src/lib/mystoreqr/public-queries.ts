@@ -83,9 +83,12 @@ export type PublicProduct = Pick<
   | "category_id"
   | "name"
   | "description"
+  | "image_url"
   | "unit"
   | "price"
+  | "original_price"
   | "display_order"
+  | "is_discounted"
   | "is_sold_out"
 >
 
@@ -134,7 +137,7 @@ export const getPublicStoreBySlug = cache(async (slug: string): Promise<PublicSt
         .order("name", { ascending: true }),
       supabase
         .from("products")
-        .select("id, category_id, name, description, unit, price, display_order, is_sold_out")
+        .select("id, category_id, name, description, image_url, unit, price, original_price, display_order, is_discounted, is_sold_out")
         .eq("store_id", store.id)
         .eq("is_active", true)
         .order("display_order", { ascending: true })

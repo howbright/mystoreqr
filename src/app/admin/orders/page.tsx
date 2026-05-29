@@ -716,6 +716,50 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
             order.price_status === "quoted" &&
             order.payment_status === "waiting_transfer" &&
             normalizePhone(order.customer_phone).length >= 10
+          const paymentConfirmedSmsText = [
+            `${selectedStore.name}입니다.`,
+            `주문번호: ${order.order_code}`,
+            `입금이 확인되었습니다. 감사합니다.`,
+            "",
+            order.fulfillment_type === "delivery"
+              ? "상품 준비 후 배달을 진행하겠습니다."
+              : "상품 준비 후 픽업 안내를 드리겠습니다.",
+            `현재 상태는 주문조회 페이지에서 확인하실 수 있습니다.`,
+            "",
+            `주문조회: ${trackingUrl}`,
+          ].join("\n")
+          const paymentConfirmedSmsHref = `sms:${normalizePhone(order.customer_phone)}?body=${encodeURIComponent(paymentConfirmedSmsText)}`
+          const canSendPaymentConfirmedSms =
+            order.payment_status === "confirmed" && normalizePhone(order.customer_phone).length >= 10
+          const deliveryStartedSmsText = [
+            `${selectedStore.name}입니다.`,
+            `주문번호: ${order.order_code}`,
+            "",
+            "주문하신 상품이 배송 출발했습니다.",
+            "잠시 후 집 앞에 도착 예정입니다.",
+            "",
+            `주문조회: ${trackingUrl}`,
+          ].join("\n")
+          const deliveryStartedSmsHref = `sms:${normalizePhone(order.customer_phone)}?body=${encodeURIComponent(deliveryStartedSmsText)}`
+          const canSendDeliveryStartedSms =
+            order.status === "delivering" &&
+            order.fulfillment_type === "delivery" &&
+            normalizePhone(order.customer_phone).length >= 10
+          const deliveryCompletedSmsText = [
+            `${selectedStore.name}입니다.`,
+            `주문번호: ${order.order_code}`,
+            "",
+            "주문하신 상품을 집 앞에 배송 완료했습니다.",
+            "확인 부탁드립니다.",
+            "",
+            "이용해 주셔서 감사합니다.",
+            `주문조회: ${trackingUrl}`,
+          ].join("\n")
+          const deliveryCompletedSmsHref = `sms:${normalizePhone(order.customer_phone)}?body=${encodeURIComponent(deliveryCompletedSmsText)}`
+          const canSendDeliveryCompletedSms =
+            order.status === "completed" &&
+            order.fulfillment_type === "delivery" &&
+            normalizePhone(order.customer_phone).length >= 10
           const orderSummaryText = [
             `주문번호: ${order.order_code}`,
             `고객: ${order.customer_name} / ${formatPhone(order.customer_phone)}`,
@@ -787,6 +831,36 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                     className="inline-flex rounded-lg bg-zinc-950 px-3 py-2 text-sm font-bold text-white hover:bg-zinc-800"
                   >
                     가격확정 문자 보내기
+                  </a>
+                </div>
+              ) : null}
+              {canSendPaymentConfirmedSms ? (
+                <div className="mt-2">
+                  <a
+                    href={paymentConfirmedSmsHref}
+                    className="inline-flex rounded-lg bg-emerald-700 px-3 py-2 text-sm font-bold text-white hover:bg-emerald-800"
+                  >
+                    입금확인 문자 보내기
+                  </a>
+                </div>
+              ) : null}
+              {canSendDeliveryStartedSms ? (
+                <div className="mt-2">
+                  <a
+                    href={deliveryStartedSmsHref}
+                    className="inline-flex rounded-lg bg-cyan-700 px-3 py-2 text-sm font-bold text-white hover:bg-cyan-800"
+                  >
+                    배송시작 문자 보내기
+                  </a>
+                </div>
+              ) : null}
+              {canSendDeliveryCompletedSms ? (
+                <div className="mt-2">
+                  <a
+                    href={deliveryCompletedSmsHref}
+                    className="inline-flex rounded-lg bg-sky-700 px-3 py-2 text-sm font-bold text-white hover:bg-sky-800"
+                  >
+                    배송완료 문자 보내기
                   </a>
                 </div>
               ) : null}

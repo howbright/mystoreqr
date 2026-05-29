@@ -65,8 +65,11 @@ export type AdminProduct = Pick<
   | "price"
   | "unit"
   | "description"
+  | "image_url"
   | "is_active"
+  | "is_discounted"
   | "is_sold_out"
+  | "original_price"
   | "display_order"
   | "category_id"
   | "updated_at"
@@ -169,7 +172,7 @@ export async function getAdminProductsByStoreId(storeId: string): Promise<AdminP
   const { data, error } = await supabase
     .from("products")
     .select(
-      "id, name, price, unit, description, is_active, is_sold_out, display_order, category_id, updated_at, categories(name)"
+      "id, name, price, unit, description, image_url, is_active, is_discounted, is_sold_out, original_price, display_order, category_id, updated_at, categories(name)"
     )
     .eq("store_id", storeId)
     .order("display_order", { ascending: true })

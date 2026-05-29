@@ -35,19 +35,6 @@ function getRecentOrderStorageKey(storeSlug: string) {
   return `mystoreqr:recent-order:${storeSlug}`
 }
 
-function urlBase64ToUint8Array(value: string) {
-  const padding = "=".repeat((4 - (value.length % 4)) % 4)
-  const base64 = `${value}${padding}`.replace(/-/g, "+").replace(/_/g, "/")
-  const rawData = window.atob(base64)
-  const output = new Uint8Array(rawData.length)
-
-  for (let index = 0; index < rawData.length; index += 1) {
-    output[index] = rawData.charCodeAt(index)
-  }
-
-  return output
-}
-
 function subscribeToRecentOrderChange(onStoreChange: () => void) {
   window.addEventListener("storage", onStoreChange)
   window.addEventListener("mystoreqr-recent-order", onStoreChange)
@@ -88,6 +75,14 @@ function formatRecentOrderDate(orderCode: string) {
   return `${Number(match[2])}/${Number(match[3])}`
 }
 
+function getDiscountRate(originalPrice: number | null, price: number | null) {
+  if (originalPrice == null || price == null || originalPrice <= price || originalPrice <= 0) {
+    return null
+  }
+
+  return Math.round(((originalPrice - price) / originalPrice) * 100)
+}
+
 export function Storefront({ storeBundle }: StorefrontProps) {
   const { store, categories, products } = storeBundle
   const storeName = store.name
@@ -106,10 +101,7 @@ export function Storefront({ storeBundle }: StorefrontProps) {
     customerNote: "",
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isSubscribingToPush, setIsSubscribingToPush] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [pushMessage, setPushMessage] = useState<string | null>(null)
-  const [pushPromptDismissed, setPushPromptDismissed] = useState(false)
   const [submitResult, setSubmitResult] = useState<OrderSubmitResult | null>(null)
   const [selectedProductTab, setSelectedProductTab] = useState("best")
   const [productSearch, setProductSearch] = useState("")
@@ -182,10 +174,9 @@ export function Storefront({ storeBundle }: StorefrontProps) {
     }
 
     if (selectedProductTab === "discount") {
-      const discountProducts = products.filter((product) => {
-        const text = `${product.name} ${product.description ?? ""}`
-        return text.includes("할인") || text.includes("특가")
-      })
+      const discountProducts = products.filter(
+        (product) => product.is_discounted && getDiscountRate(product.original_price, product.price)
+      )
 
       return [
         {
@@ -302,8 +293,6 @@ export function Storefront({ storeBundle }: StorefrontProps) {
         orderCode: payload.orderCode,
         trackingPath: payload.trackingPath,
       })
-      setPushPromptDismissed(false)
-      setPushMessage(null)
       const nextRecentOrder = {
         orderCode: payload.orderCode,
         trackingPath: payload.trackingPath,
@@ -327,73 +316,6 @@ export function Storefront({ storeBundle }: StorefrontProps) {
       setErrorMessage("네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
     } finally {
       setIsSubmitting(false)
-    }
-  }
-
-  async function subscribeToQuotePush() {
-    setPushMessage(null)
-
-    if (!submitResult) {
-      setPushMessage("주문 접수 후 알림을 신청할 수 있습니다.")
-      return
-    }
-
-    const vapidPublicKey = process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY
-    if (!vapidPublicKey) {
-      setPushMessage("알림 설정이 아직 준비되지 않았습니다.")
-      return
-    }
-
-    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
-      setPushMessage("이 브라우저는 웹 푸시 알림을 지원하지 않습니다.")
-      return
-    }
-
-    if (!window.isSecureContext) {
-      setPushMessage("알림은 HTTPS 환경에서 사용할 수 있습니다.")
-      return
-    }
-
-    setIsSubscribingToPush(true)
-    try {
-      const permission = await Notification.requestPermission()
-      if (permission !== "granted") {
-        setPushMessage("알림 권한이 허용되지 않았습니다.")
-        return
-      }
-
-      const registration = await navigator.serviceWorker.register("/sw.js")
-      const existingSubscription = await registration.pushManager.getSubscription()
-      const subscription =
-        existingSubscription ??
-        (await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-        }))
-
-      const response = await fetch("/api/public/push-subscriptions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          orderId: submitResult.orderId,
-          ...subscription.toJSON(),
-        }),
-      })
-
-      if (!response.ok) {
-        const payload = (await response.json()) as { error?: string }
-        setPushMessage(payload.error ?? "알림 신청에 실패했습니다.")
-        return
-      }
-
-      setPushMessage("금액이 확정되면 이 브라우저로 알림을 보내드릴게요.")
-      setPushPromptDismissed(true)
-    } catch {
-      setPushMessage("알림 신청 중 오류가 발생했습니다.")
-    } finally {
-      setIsSubscribingToPush(false)
     }
   }
 
@@ -495,23 +417,56 @@ export function Storefront({ storeBundle }: StorefrontProps) {
                 <div className="mt-3 space-y-3">
                   {category.products.map((product) => {
                     const quantity = quantities[product.id] ?? 0
+                    const discountRate = product.is_discounted
+                      ? getDiscountRate(product.original_price, product.price)
+                      : null
                     return (
                       <div
                         key={product.id}
                         className="flex items-center justify-between rounded-xl border border-zinc-100 p-3"
                       >
-                        <div className="pr-2">
-                          <p className="font-medium text-zinc-900">{product.name}</p>
-                          <p className="text-sm text-zinc-600">
-                            {formatKrw(product.price)}
-                            {product.unit ? ` / ${product.unit}` : ""}
-                          </p>
+                        <div className="flex min-w-0 items-center gap-3 pr-2">
+                          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-zinc-100">
+                            {product.image_url ? (
+                              <div
+                                className="h-full w-full bg-cover bg-center"
+                                style={{ backgroundImage: `url(${product.image_url})` }}
+                                role="img"
+                                aria-label={`${product.name} 상품 사진`}
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-[11px] font-medium text-zinc-400">
+                                사진
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <p className="font-medium text-zinc-900">{product.name}</p>
+                              {discountRate ? (
+                                <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-bold text-rose-700">
+                                  {discountRate}% 할인
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="mt-0.5 flex flex-wrap items-baseline gap-1.5 text-sm">
+                              {discountRate ? (
+                                <span className="text-xs text-zinc-400 line-through">
+                                  {formatKrw(product.original_price)}
+                                </span>
+                              ) : null}
+                              <span className={discountRate ? "font-bold text-rose-700" : "text-zinc-600"}>
+                                {formatKrw(product.price)}
+                              </span>
+                              {product.unit ? <span className="text-zinc-500">/ {product.unit}</span> : null}
+                            </div>
                           {product.description ? (
                             <p className="mt-1 text-xs text-zinc-500">{product.description}</p>
                           ) : null}
                           {product.is_sold_out ? (
                             <p className="mt-1 text-xs font-semibold text-rose-600">품절</p>
                           ) : null}
+                          </div>
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -778,34 +733,6 @@ export function Storefront({ storeBundle }: StorefrontProps) {
                     {formatCustomerOrderCode(submitResult.orderCode)}
                   </p>
                   <p className="mt-3 text-xs text-zinc-500">화면을 닫기 전에 번호를 확인해 주세요.</p>
-                  {!pushPromptDismissed ? (
-                    <div className="mt-5 rounded-lg border border-brand-border bg-brand-soft px-3 py-3">
-                      <p className="text-sm font-semibold text-zinc-900">
-                        금액이 확정되면 이 브라우저로 알림을 보내드릴까요?
-                      </p>
-                      <div className="mt-3 grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void subscribeToQuotePush()}
-                          disabled={isSubscribingToPush}
-                          className="inline-flex h-10 items-center justify-center rounded-lg bg-brand px-3 text-sm font-bold text-white hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {isSubscribingToPush ? "신청 중..." : "네, 받을게요"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPushPromptDismissed(true)
-                            setPushMessage("알림 없이 주문번호로 직접 조회할 수 있습니다.")
-                          }}
-                          className="inline-flex h-10 items-center justify-center rounded-lg border border-zinc-300 bg-white px-3 text-sm font-bold text-zinc-700 hover:bg-zinc-50"
-                        >
-                          아니요
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-                  {pushMessage ? <p className="mt-2 text-xs text-zinc-600">{pushMessage}</p> : null}
                   <Link
                     href={submitResult.trackingPath}
                     className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-lg bg-brand px-4 text-sm font-bold text-white hover:bg-brand-strong"

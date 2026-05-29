@@ -130,6 +130,57 @@ export type Database = {
           },
         ]
       }
+      order_push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          order_id: string
+          p256dh: string
+          store_id: string
+          updated_at: string
+          user_agent: string | null
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          order_id: string
+          p256dh: string
+          store_id: string
+          updated_at?: string
+          user_agent?: string | null
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          order_id?: string
+          p256dh?: string
+          store_id?: string
+          updated_at?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_push_subscriptions_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_push_subscriptions_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_status_events: {
         Row: {
           changed_by: string | null
@@ -288,8 +339,10 @@ export type Database = {
           id: string
           image_url: string | null
           is_active: boolean
+          is_discounted: boolean
           is_sold_out: boolean
           name: string
+          original_price: number | null
           price: number | null
           sku: string | null
           store_id: string
@@ -304,8 +357,10 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_active?: boolean
+          is_discounted?: boolean
           is_sold_out?: boolean
           name: string
+          original_price?: number | null
           price?: number | null
           sku?: string | null
           store_id: string
@@ -320,8 +375,10 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_active?: boolean
+          is_discounted?: boolean
           is_sold_out?: boolean
           name?: string
+          original_price?: number | null
           price?: number | null
           sku?: string | null
           store_id?: string

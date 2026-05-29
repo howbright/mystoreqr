@@ -50,7 +50,7 @@ export async function GET(request: Request) {
         .eq("store_id", store.id),
       supabase
         .from("products")
-        .select("id, name, category_id, price, unit, description, is_sold_out, is_active, display_order")
+        .select("id, name, category_id, price, original_price, unit, description, is_discounted, is_sold_out, is_active, display_order")
         .eq("store_id", store.id)
         .order("display_order", { ascending: true })
         .order("name", { ascending: true }),
@@ -67,15 +67,17 @@ export async function GET(request: Request) {
   const categoryMap = new Map((categories ?? []).map((category) => [category.id, category.name]))
 
   const lines = [
-    "id,name,category,price,unit,description,is_sold_out,is_active,display_order",
+    "id,name,category,price,original_price,unit,description,is_discounted,is_sold_out,is_active,display_order",
     ...(products ?? []).map((product) =>
       [
         product.id,
         product.name,
         product.category_id ? (categoryMap.get(product.category_id) ?? "") : "",
         product.price == null ? "" : String(product.price),
+        product.original_price == null ? "" : String(product.original_price),
         product.unit ?? "",
         product.description ?? "",
+        toCsvBoolean(product.is_discounted),
         toCsvBoolean(product.is_sold_out),
         toCsvBoolean(product.is_active),
         String(product.display_order ?? 0),

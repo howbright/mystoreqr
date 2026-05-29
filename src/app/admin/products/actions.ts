@@ -12,15 +12,37 @@ type CsvProductRow = {
   name: string
   category: string
   price: number | null
+  originalPrice: number | null
   unit: string | null
   description: string | null
+  isDiscounted: boolean
   isSoldOut: boolean
   isActive: boolean
   displayOrder: number
 }
 
+const PRODUCT_IMAGE_BUCKET = "product-images"
+const MAX_PRODUCT_IMAGE_BYTES = 5 * 1024 * 1024
+const ALLOWED_PRODUCT_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"])
+
 function isUuidLike(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+}
+
+function getImageExtension(file: File) {
+  if (file.type === "image/jpeg") {
+    return "jpg"
+  }
+
+  if (file.type === "image/png") {
+    return "png"
+  }
+
+  if (file.type === "image/webp") {
+    return "webp"
+  }
+
+  return null
 }
 
 function toSafeString(value: FormDataEntryValue | null) {
@@ -116,8 +138,10 @@ function parseProductsCsv(csvText: string): CsvProductRow[] {
   const idIndex = getIndex("id")
   const categoryIndex = getIndex("category")
   const priceIndex = getIndex("price")
+  const originalPriceIndex = getIndex("original_price")
   const unitIndex = getIndex("unit")
   const descriptionIndex = getIndex("description")
+  const discountedIndex = getIndex("is_discounted")
   const soldOutIndex = getIndex("is_sold_out")
   const activeIndex = getIndex("is_active")
   const displayOrderIndex = getIndex("display_order")
@@ -147,6 +171,12 @@ function parseProductsCsv(csvText: string): CsvProductRow[] {
       throw new Error(`상품 "${name}"의 price 값이 올바르지 않습니다.`)
     }
 
+    const originalPriceRaw = originalPriceIndex >= 0 ? (cols[originalPriceIndex] ?? "").trim() : ""
+    const originalPrice = parseNonNegativeIntOrNull(originalPriceRaw)
+    if (originalPriceRaw && originalPrice == null) {
+      throw new Error(`상품 "${name}"의 original_price 값이 올바르지 않습니다.`)
+    }
+
     const displayOrderRaw = displayOrderIndex >= 0 ? (cols[displayOrderIndex] ?? "").trim() : ""
     const displayOrder = parseNonNegativeIntOrNull(displayOrderRaw) ?? 0
 
@@ -155,8 +185,10 @@ function parseProductsCsv(csvText: string): CsvProductRow[] {
       name,
       category,
       price,
+      originalPrice,
       unit: (unitIndex >= 0 ? cols[unitIndex] : "")?.trim() || null,
       description: (descriptionIndex >= 0 ? cols[descriptionIndex] : "")?.trim() || null,
+      isDiscounted: parseBooleanText(discountedIndex >= 0 ? cols[discountedIndex] ?? "" : "", false),
       isSoldOut: parseBooleanText(soldOutIndex >= 0 ? cols[soldOutIndex] ?? "" : "", false),
       isActive: parseBooleanText(activeIndex >= 0 ? cols[activeIndex] ?? "" : "", true),
       displayOrder,
@@ -183,6 +215,67 @@ async function getStoreIdBySlugOrRedirect(storeSlug: string) {
   }
 
   return data.id
+}
+
+async function ensureProductImageBucket() {
+  const supabase = createAdminClient()
+  const { data: buckets, error: listError } = await supabase.storage.listBuckets()
+
+  if (listError) {
+    throw new Error(`이미지 저장소 조회 실패: ${listError.message}`)
+  }
+
+  if (buckets?.some((bucket) => bucket.name === PRODUCT_IMAGE_BUCKET)) {
+    return
+  }
+
+  const { error: createError } = await supabase.storage.createBucket(PRODUCT_IMAGE_BUCKET, {
+    public: true,
+    fileSizeLimit: MAX_PRODUCT_IMAGE_BYTES,
+    allowedMimeTypes: Array.from(ALLOWED_PRODUCT_IMAGE_TYPES),
+  })
+
+  if (createError && !createError.message.toLowerCase().includes("already exists")) {
+    throw new Error(`이미지 저장소 생성 실패: ${createError.message}`)
+  }
+}
+
+async function uploadProductImageOrRedirect(storeSlug: string, productId: string, file: File) {
+  if (file.size === 0) {
+    return null
+  }
+
+  if (file.size > MAX_PRODUCT_IMAGE_BYTES) {
+    redirectWithError(storeSlug, "상품 이미지는 5MB 이하로 업로드해 주세요.")
+  }
+
+  const extension = getImageExtension(file)
+  if (!extension) {
+    redirectWithError(storeSlug, "상품 이미지는 JPG, PNG, WebP 형식만 업로드할 수 있습니다.")
+  }
+
+  try {
+    await ensureProductImageBucket()
+  } catch (error) {
+    redirectWithError(storeSlug, error instanceof Error ? error.message : "이미지 저장소 준비 실패")
+  }
+
+  const supabase = createAdminClient()
+  const path = `${storeSlug}/${productId}-${Date.now()}.${extension}`
+  const { error: uploadError } = await supabase.storage
+    .from(PRODUCT_IMAGE_BUCKET)
+    .upload(path, file, {
+      cacheControl: "31536000",
+      contentType: file.type,
+      upsert: true,
+    })
+
+  if (uploadError) {
+    redirectWithError(storeSlug, `상품 이미지 업로드 실패: ${uploadError.message}`)
+  }
+
+  const { data } = supabase.storage.from(PRODUCT_IMAGE_BUCKET).getPublicUrl(path)
+  return data.publicUrl
 }
 
 export async function importProductsCsvAction(formData: FormData) {
@@ -267,8 +360,10 @@ export async function importProductsCsvAction(formData: FormData) {
       category_id: categoryId,
       name: row.name,
       price: row.price,
+      original_price: row.originalPrice,
       unit: row.unit,
       description: row.description,
+      is_discounted: row.isDiscounted,
       is_sold_out: row.isSoldOut,
       is_active: row.isActive,
       display_order: row.displayOrder,
@@ -292,8 +387,10 @@ export async function importProductsCsvAction(formData: FormData) {
       category_id: categoryId,
       name: row.name,
       price: row.price,
+      original_price: row.originalPrice,
       unit: row.unit,
       description: row.description,
+      is_discounted: row.isDiscounted,
       is_sold_out: row.isSoldOut,
       is_active: row.isActive,
       display_order: row.displayOrder,
@@ -326,28 +423,63 @@ export async function updateProductQuickAction(formData: FormData) {
   const description = toSafeString(formData.get("description"))
   const priceRaw = toSafeString(formData.get("price"))
   const price = parseNonNegativeIntOrNull(priceRaw)
+  const originalPriceRaw = toSafeString(formData.get("originalPrice"))
+  const originalPrice = parseNonNegativeIntOrNull(originalPriceRaw)
+  const imageFile = formData.get("imageFile")
 
   if (priceRaw && price == null) {
     redirectWithError(storeSlug, "가격은 빈값 또는 0 이상의 정수로 입력해 주세요.")
+  }
+
+  if (originalPriceRaw && originalPrice == null) {
+    redirectWithError(storeSlug, "원래 가격은 빈값 또는 0 이상의 정수로 입력해 주세요.")
   }
 
   if (!productId) {
     redirectWithError(storeSlug, "상품 ID가 누락되었습니다.")
   }
 
+  const storeId = await getStoreIdBySlugOrRedirect(storeSlug)
+  const supabase = createAdminClient()
+  const { data: existingProduct, error: existingProductError } = await supabase
+    .from("products")
+    .select("id")
+    .eq("id", productId)
+    .eq("store_id", storeId)
+    .maybeSingle()
+
+  if (existingProductError) {
+    redirectWithError(storeSlug, `상품 조회 실패: ${existingProductError.message}`)
+  }
+
+  if (!existingProduct) {
+    redirectWithError(storeSlug, "상품을 찾을 수 없습니다.")
+  }
+
+  const imageUrl =
+    imageFile instanceof File && imageFile.size > 0
+      ? await uploadProductImageOrRedirect(storeSlug, productId, imageFile)
+      : null
+
   const isSoldOut = formData.has("isSoldOut")
   const isActive = formData.has("isActive")
+  const isDiscounted = formData.has("isDiscounted")
 
   const updatePayload: TablesUpdate<"products"> = {
     name,
     price,
+    original_price: originalPrice,
     unit: unit || null,
     description: description || null,
+    is_discounted: isDiscounted,
     is_sold_out: isSoldOut,
     is_active: isActive,
   }
 
-  const supabase = createAdminClient()
+  if (imageUrl) {
+    updatePayload.image_url = imageUrl
+  }
+
   const { error } = await supabase
     .from("products")
     .update(updatePayload)
