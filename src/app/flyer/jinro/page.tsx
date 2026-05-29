@@ -26,7 +26,7 @@ const ownerPoints = [
     body: "고객 주문 접수 후 마트에서 최종 금액을 확정할 수 있습니다. 시세 상품이나 할인 적용도 그때 반영할 수 있습니다.",
   },
   {
-    title: "처음 상품목록 관리를 도와드립니다",
+    title: "처음 상품목록 등록을 도와드립니다",
     body: "엑셀 파일을 주시면 초기 상품 등록을 도와드립니다. 이후에는 관리자 화면에서 가격, 품절, 할인상품, 사진을 쉽게 수정할 수 있습니다.",
   },
 ]
@@ -100,7 +100,7 @@ export default function JinroFlyerPage() {
 
         <div className="mt-auto flex items-center justify-between gap-5 rounded-2xl border-2 border-zinc-950 p-4">
           <div>
-            <p className="text-lg font-black text-zinc-950">아래 QR로 바로 체험해보실 수 있습니다</p>
+            <p className="text-lg font-black text-zinc-950">아래 QR로 바로 고객 입장에서 체험해보실 수 있습니다</p>
             <p className="mt-3 text-base font-black text-brand-strong">
               관심 있으시면 전화주세요. 이나현 010-6380-8672
             </p>

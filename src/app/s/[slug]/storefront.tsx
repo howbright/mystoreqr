@@ -745,6 +745,9 @@ export function Storefront({ storeBundle }: StorefrontProps) {
                     {formatCustomerOrderCode(submitResult.orderCode)}
                   </p>
                   <p className="mt-3 text-xs text-zinc-500">화면을 닫기 전에 번호를 확인해 주세요.</p>
+                  <p className="mt-3 rounded-lg bg-brand-soft px-3 py-2 text-sm font-bold leading-relaxed text-brand-strong">
+                    가격 확정, 입금 확인, 배송 진행 과정은 입력하신 연락처로 문자 안내드립니다.
+                  </p>
                   <Link
                     href={submitResult.trackingPath}
                     className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-lg bg-brand px-4 text-sm font-bold text-white hover:bg-brand-strong"
