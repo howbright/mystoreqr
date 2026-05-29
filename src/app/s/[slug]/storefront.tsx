@@ -79,6 +79,15 @@ function parseRecentOrders(value: string | null): RecentOrder[] {
   }
 }
 
+function formatRecentOrderDate(orderCode: string) {
+  const match = orderCode.match(/^(\d{4})(\d{2})(\d{2})-/)
+  if (!match) {
+    return ""
+  }
+
+  return `${Number(match[2])}/${Number(match[3])}`
+}
+
 export function Storefront({ storeBundle }: StorefrontProps) {
   const { store, categories, products } = storeBundle
   const storeName = store.name
@@ -413,9 +422,12 @@ export function Storefront({ storeBundle }: StorefrontProps) {
                 <Link
                   key={`${order.orderCode}-${order.savedAt}`}
                   href={order.trackingPath}
-                  className="inline-flex rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-strong"
+                  className="inline-flex flex-col rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-strong"
                 >
-                  #{formatCustomerOrderCode(order.orderCode)}
+                  <span>#{formatCustomerOrderCode(order.orderCode)}</span>
+                  {formatRecentOrderDate(order.orderCode) ? (
+                    <span className="text-[11px] font-medium text-white/80">{formatRecentOrderDate(order.orderCode)}</span>
+                  ) : null}
                 </Link>
               ))}
             </div>

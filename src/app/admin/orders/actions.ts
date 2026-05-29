@@ -137,7 +137,7 @@ export async function setOrderQuoteAction(formData: FormData) {
 
   const { data: existingOrder, error: existingOrderError } = await supabase
     .from("orders")
-    .select("payment_status")
+    .select("status, payment_status, price_status, cancel_reason")
     .eq("id", orderId)
     .maybeSingle()
 
@@ -147,6 +147,18 @@ export async function setOrderQuoteAction(formData: FormData) {
 
   if (!existingOrder) {
     redirectWithError(storeSlug, "주문을 찾을 수 없습니다.", returnTo)
+  }
+
+  if (existingOrder.status === "canceled") {
+    redirectWithError(
+      storeSlug,
+      `고객이 가격확정 전에 주문을 취소했습니다.${existingOrder.cancel_reason ? ` 사유: ${existingOrder.cancel_reason}` : ""}`,
+      returnTo
+    )
+  }
+
+  if (existingOrder.status !== "pending" || existingOrder.price_status !== "needs_review") {
+    redirectWithError(storeSlug, "이미 처리 중이거나 가격확정 대상이 아닌 주문입니다.", returnTo)
   }
 
   if (existingOrder.payment_status === "confirmed") {
@@ -232,6 +244,20 @@ export async function setOrderQuoteAction(formData: FormData) {
   }
 
   if (!data || data.length === 0) {
+    const { data: latestOrder } = await supabase
+      .from("orders")
+      .select("status, cancel_reason")
+      .eq("id", orderId)
+      .maybeSingle()
+
+    if (latestOrder?.status === "canceled") {
+      redirectWithError(
+        storeSlug,
+        `고객이 가격확정 전에 주문을 취소했습니다.${latestOrder.cancel_reason ? ` 사유: ${latestOrder.cancel_reason}` : ""}`,
+        returnTo
+      )
+    }
+
     redirectWithError(
       storeSlug,
       "가격 확정 가능한 주문이 아닙니다. (pending 상태이며 입금확인 전 주문만 가능)",
@@ -290,9 +316,34 @@ export async function setOrderStatusAction(formData: FormData) {
   }
 
   const supabase = getAdminClientOrRedirect(storeSlug, returnTo)
+
+  if (actorView === "quote" && nextStatus === "canceled") {
+    const { data: orderForCancel, error: orderForCancelError } = await supabase
+      .from("orders")
+      .select("status, price_status, payment_status")
+      .eq("id", orderId)
+      .maybeSingle()
+
+    if (orderForCancelError) {
+      redirectWithError(storeSlug, `주문 조회 실패: ${orderForCancelError.message}`, returnTo)
+    }
+
+    if (!orderForCancel) {
+      redirectWithError(storeSlug, "주문을 찾을 수 없습니다.", returnTo)
+    }
+
+    if (
+      orderForCancel.status !== "pending" ||
+      orderForCancel.price_status !== "needs_review" ||
+      orderForCancel.payment_status !== "not_ready"
+    ) {
+      redirectWithError(storeSlug, "가격확정 전 접수 주문만 가격확정담당 뷰에서 취소할 수 있습니다.", returnTo)
+    }
+  }
+
   const updatePayload: Database["public"]["Tables"]["orders"]["Update"] = {
     status: nextStatus,
-    cancel_reason: nextStatus === "canceled" ? statusNote || "관리자 취소" : null,
+    cancel_reason: nextStatus === "canceled" ? statusNote || "테스트 주문 정리" : null,
   }
 
   const { error } = await supabase.from("orders").update(updatePayload).eq("id", orderId)

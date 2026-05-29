@@ -427,6 +427,14 @@ export function TrackClient({
             <p className="font-semibold text-zinc-900">{bankInfo.name}</p>
             {bankInfo.roadAddress ? <p className="mt-1">{bankInfo.roadAddress}</p> : null}
             {bankInfo.jibunAddress ? <p className="mt-0.5 text-xs text-zinc-500">지번: {bankInfo.jibunAddress}</p> : null}
+            {storeSlug ? (
+              <a
+                href={`/s/${encodeURIComponent(storeSlug)}`}
+                className="mt-3 inline-flex rounded-lg bg-brand px-3 py-2 text-sm font-bold text-white hover:bg-brand-strong"
+              >
+                {bankInfo.name}에서 다시 주문하기
+              </a>
+            ) : null}
           </div>
         ) : null}
         <div className="grid gap-3">

@@ -59,7 +59,7 @@ export function canManagePaymentInView(view: OrderWorkView) {
 }
 
 export function canCancelOrderInView(view: OrderWorkView) {
-  return view === "all"
+  return view === "all" || view === "quote"
 }
 
 export function getPrimaryOrderStatusOptionsForView(view: OrderWorkView) {

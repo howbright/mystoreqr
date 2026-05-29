@@ -4,7 +4,7 @@ import { logoutAdminAction } from "@/app/admin/_actions/auth"
 import { requireAdminSessionOrRedirect } from "@/lib/mystoreqr/admin-auth"
 import { ORDER_STATUS_OPTIONS, PAYMENT_STATUS_OPTIONS } from "@/lib/mystoreqr/constants"
 import { getAdminOrdersByStoreId, getAdminStores } from "@/lib/mystoreqr/admin-queries"
-import { formatKrw, formatPhone } from "@/lib/mystoreqr/format"
+import { formatKrw, formatPhone, normalizePhone } from "@/lib/mystoreqr/format"
 import {
   ORDER_WORK_VIEW_META,
   ORDER_WORK_VIEWS,
@@ -17,6 +17,7 @@ import {
 } from "@/lib/mystoreqr/order-work-view"
 import { orderStatusLabel, paymentStatusLabel, priceStatusLabel } from "@/lib/mystoreqr/status"
 
+import { OrderChangeBanner } from "./order-change-banner"
 import { OrderTools } from "./order-tools"
 import { QuoteForm } from "./quote-form"
 import { setOrderStatusAction, setPaymentStatusAction } from "./actions"
@@ -333,6 +334,14 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
     return `/admin/orders?${params.toString()}`
   })()
   const appBaseUrl = getAppBaseUrl()
+  const isCustomerCanceledConflict = errorMessage?.includes("고객이 가격확정 전에 주문을 취소했습니다.") ?? false
+  const initialLatestUpdatedAt =
+    orders.reduce<string | null>((latest, order) => {
+      if (!latest || new Date(order.updated_at).getTime() > new Date(latest).getTime()) {
+        return order.updated_at
+      }
+      return latest
+    }, null) ?? new Date().toISOString()
   const paymentAttentionCount = roleFilteredOrders.filter(
     (order) => order.payment_status === "transfer_submitted" || order.payment_status === "waiting_transfer"
   ).length
@@ -463,6 +472,36 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
       {errorMessage ? (
         <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{errorMessage}</p>
       ) : null}
+      {isCustomerCanceledConflict ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/45 px-4">
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="customer-canceled-title"
+            className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"
+          >
+            <p className="text-xs font-bold text-rose-700">주문 상태가 변경되었습니다</p>
+            <h2 id="customer-canceled-title" className="mt-1 text-xl font-black text-zinc-950">
+              고객이 주문을 취소했습니다
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-zinc-700">{errorMessage}</p>
+            <p className="mt-2 text-sm leading-6 text-zinc-600">
+              이 주문은 가격확정을 진행할 수 없습니다. 확인을 누르면 현재 목록으로 돌아갑니다.
+            </p>
+            <Link
+              href={actionReturnTo}
+              className="mt-5 inline-flex h-10 w-full items-center justify-center rounded-lg bg-brand px-4 text-sm font-bold text-white hover:bg-brand-strong"
+            >
+              확인
+            </Link>
+          </div>
+        </div>
+      ) : null}
+
+      <OrderChangeBanner
+        storeSlug={selectedStore.slug}
+        initialLatestUpdatedAt={initialLatestUpdatedAt}
+      />
 
       <section className="mq-card p-4">
         <form className={`grid gap-3 ${showStructuredFilters ? "md:grid-cols-2 xl:grid-cols-5" : "md:grid-cols-1"}`}>
@@ -661,6 +700,22 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
             `주문 조회: ${trackingUrl}`,
             "감사합니다.",
           ].join("\n")
+          const quoteSmsText = [
+            `${selectedStore.name}입니다.`,
+            `주문번호: ${order.order_code}`,
+            `확정금액: ${formatKrw(order.total_amount)}`,
+            "",
+            "입금계좌:",
+            `${selectedStore.bank_name} ${selectedStore.bank_account_number}`,
+            `예금주: ${selectedStore.bank_account_holder}`,
+            "",
+            `주문조회: ${trackingUrl}`,
+          ].join("\n")
+          const quoteSmsHref = `sms:${normalizePhone(order.customer_phone)}?body=${encodeURIComponent(quoteSmsText)}`
+          const canSendQuoteSms =
+            order.price_status === "quoted" &&
+            order.payment_status === "waiting_transfer" &&
+            normalizePhone(order.customer_phone).length >= 10
           const orderSummaryText = [
             `주문번호: ${order.order_code}`,
             `고객: ${order.customer_name} / ${formatPhone(order.customer_phone)}`,
@@ -725,6 +780,16 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                   customerGuideText={customerGuideText}
                 />
               </div>
+              {canSendQuoteSms ? (
+                <div className="mt-2">
+                  <a
+                    href={quoteSmsHref}
+                    className="inline-flex rounded-lg bg-zinc-950 px-3 py-2 text-sm font-bold text-white hover:bg-zinc-800"
+                  >
+                    가격확정 문자 보내기
+                  </a>
+                </div>
+              ) : null}
 
               <div className="mt-3 grid gap-1 text-sm text-zinc-700">
                 <p>
