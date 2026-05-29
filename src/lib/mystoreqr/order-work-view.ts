@@ -90,7 +90,10 @@ export function isOrderVisibleInWorkView(order: RoleFilteredOrder, view: OrderWo
     return (
       order.status !== "completed" &&
       order.status !== "canceled" &&
-      order.price_status === "needs_review"
+      (
+        order.price_status === "needs_review" ||
+        (order.price_status === "quoted" && order.payment_status === "waiting_transfer")
+      )
     )
   }
 

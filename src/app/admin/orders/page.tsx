@@ -672,9 +672,12 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
           const hasUnknownLine = order.order_items.some((item) => item.unit_price == null)
           const defaultDeliveryFee = order.delivery_fee ?? selectedStore.delivery_fee
           const isPaymentConfirmed = order.payment_status === "confirmed"
-          const canManageQuote = canManageQuoteInView(selectedWorkView)
+          const canManageQuote = canManageQuoteInView(selectedWorkView) && order.price_status === "needs_review"
           const canManagePayment = canManagePaymentInView(selectedWorkView)
-          const canCancelOrder = canCancelOrderInView(selectedWorkView)
+          const canCancelOrder =
+            canCancelOrderInView(selectedWorkView) &&
+            order.status === "pending" &&
+            order.price_status === "needs_review"
           const primaryStatusOptions = getPrimaryOrderStatusOptionsForView(selectedWorkView)
           const showStatusForm = primaryStatusOptions.length > 0 || canCancelOrder
           const actionFormCount = [canManageQuote, showStatusForm, canManagePayment].filter(Boolean).length
