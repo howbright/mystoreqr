@@ -171,11 +171,13 @@ function getCustomerGuideMessage(order: TrackingOrder) {
 }
 
 const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul",
   dateStyle: "medium",
   timeStyle: "short",
 })
 
 const timeFormatter = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul",
   timeStyle: "medium",
 })
 

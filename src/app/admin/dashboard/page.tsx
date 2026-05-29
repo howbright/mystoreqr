@@ -21,11 +21,13 @@ function firstString(value: string | string[] | undefined) {
 }
 
 const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul",
   month: "2-digit",
   day: "2-digit",
 })
 
 const dateTimeFormatter = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul",
   dateStyle: "medium",
   timeStyle: "short",
 })

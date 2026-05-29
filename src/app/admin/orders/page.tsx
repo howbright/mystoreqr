@@ -23,6 +23,7 @@ import { QuoteForm } from "./quote-form"
 import { setOrderStatusAction, setPaymentStatusAction } from "./actions"
 
 const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul",
   dateStyle: "medium",
   timeStyle: "short",
 })

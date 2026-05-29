@@ -310,7 +310,7 @@ export default async function AdminProductsPage(props: PageProps<"/admin/product
 
                     <div className="flex items-center gap-2">
                       <p className="text-[11px] text-zinc-400">
-                        수정일 {new Date(product.updated_at).toLocaleDateString("ko-KR")}
+                        수정일 {new Date(product.updated_at).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })}
                       </p>
                       <button type="submit" className="mq-btn-primary h-9 w-20 rounded-md text-xs">
                         저장
