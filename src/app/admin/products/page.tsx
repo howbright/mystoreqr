@@ -212,7 +212,7 @@ export default async function AdminProductsPage(props: PageProps<"/admin/product
         <h2 className="text-lg font-semibold text-zinc-900">빠른 수정</h2>
         <p className="mt-1 text-sm text-zinc-600">가격/품절/활성 여부를 바로 수정할 수 있습니다.</p>
 
-        <div className="mt-3 space-y-3">
+        <div className="mt-3 flex flex-col gap-3">
           {products.map((product) => (
             <form
               key={product.id}
@@ -225,7 +225,7 @@ export default async function AdminProductsPage(props: PageProps<"/admin/product
               <div className="grid gap-4 lg:grid-cols-[7rem_1fr]">
                 <ProductImageField productName={product.name} imageUrl={product.image_url} />
 
-                <div className="min-w-0 space-y-3">
+                <div className="flex min-w-0 flex-col gap-3">
                   <div className="grid gap-3 md:grid-cols-[minmax(18rem,1fr)_7rem_8rem_5.5rem] xl:grid-cols-[minmax(24rem,1fr)_8rem_8rem_5rem]">
                     <label className="grid min-w-0 gap-1 text-xs text-zinc-600">
                       상품명

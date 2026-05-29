@@ -38,7 +38,7 @@ export default async function AdminLoginPage(props: PageProps<"/admin/login">) {
           <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">로그아웃되었습니다.</p>
         ) : null}
 
-        <form action={loginAdminAction} className="mt-4 space-y-3">
+        <form action={loginAdminAction} className="mt-4 flex flex-col gap-3">
           <input type="hidden" name="next" value={nextPath} />
           <label className="grid gap-1 text-sm">
             <span className="font-medium text-zinc-700">관리자 PIN</span>

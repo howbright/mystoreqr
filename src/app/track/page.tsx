@@ -3,6 +3,8 @@ import {
   getOrderTrackingByToken,
   getOrderTrackingItemsByOrderCode,
   getOrderTrackingItemsByToken,
+  getOrderTrackingStoreInfoByOrderCode,
+  getOrderTrackingStoreInfoByToken,
   getPublicStoreBySlug,
 } from "@/lib/mystoreqr/public-queries"
 
@@ -36,6 +38,12 @@ export default async function TrackPage(props: PageProps<"/track">) {
       : []
 
   const storeBundle = initialStoreSlug ? await getPublicStoreBySlug(initialStoreSlug) : null
+  const fallbackBankInfo =
+    !storeBundle && initialLookupToken
+      ? await getOrderTrackingStoreInfoByToken(initialLookupToken, initialPhone)
+      : !storeBundle && initialOrderCode && initialPhone
+        ? await getOrderTrackingStoreInfoByOrderCode(initialOrderCode, initialPhone, initialStoreSlug)
+        : null
 
   const bankInfo = storeBundle
     ? {
@@ -46,7 +54,7 @@ export default async function TrackPage(props: PageProps<"/track">) {
         bankAccountNumber: storeBundle.store.bank_account_number,
         bankAccountHolder: storeBundle.store.bank_account_holder,
       }
-    : null
+    : fallbackBankInfo
 
   return (
     <TrackClient

@@ -154,7 +154,7 @@ export default async function AdminOnboardingPage(props: PageProps<"/admin/onboa
 
         <article className="mq-card p-5">
           <h2 className="text-lg font-semibold text-zinc-900">운영 체크리스트</h2>
-          <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-zinc-700">
+          <ol className="mt-3 flex list-decimal flex-col gap-2 pl-5 text-sm text-zinc-700">
             <li>상품 관리에서 주력 상품 20개 먼저 등록</li>
             <li>가격 미확정 상품은 빈 가격으로 두고 설명에 시세 표기</li>
             <li>QR 출력 후 매장 입구/계산대에 부착</li>
@@ -174,7 +174,7 @@ export default async function AdminOnboardingPage(props: PageProps<"/admin/onboa
           고객 주문 페이지의 주문자 정보 위에 표시됩니다. 최소 주문금액, 배달비, 가격 확정 방식처럼 주문 전에
           꼭 알아야 하는 내용을 적어주세요.
         </p>
-        <form action={updateStoreOrderPolicyAction} className="mt-4 space-y-3">
+        <form action={updateStoreOrderPolicyAction} className="mt-4 flex flex-col gap-3">
           <input type="hidden" name="storeSlug" value={selectedStore.slug} />
           <textarea
             name="orderPolicy"

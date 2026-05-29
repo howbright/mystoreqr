@@ -405,7 +405,7 @@ export function Storefront({ storeBundle }: StorefrontProps) {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[2fr_1fr]">
-        <div className="space-y-4">
+        <div className="flex flex-col gap-4">
           {visibleProductSections.map((category) => (
             <article key={category.id} className="mq-card p-4">
               <h2 className="text-lg font-semibold text-zinc-900">{category.name}</h2>
@@ -414,7 +414,7 @@ export function Storefront({ storeBundle }: StorefrontProps) {
                   {category.emptyMessage}
                 </p>
               ) : (
-                <div className="mt-3 space-y-3">
+                <div className="mt-3 flex flex-col gap-3">
                   {category.products.map((product) => {
                     const quantity = quantities[product.id] ?? 0
                     const discountRate = product.is_discounted
@@ -516,7 +516,7 @@ export function Storefront({ storeBundle }: StorefrontProps) {
           ))}
         </div>
 
-        <aside className="space-y-4">
+        <aside className="flex flex-col gap-4">
           <section className="mq-card p-4">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-lg font-semibold text-zinc-900">장바구니</h2>
@@ -532,7 +532,7 @@ export function Storefront({ storeBundle }: StorefrontProps) {
             {selectedItems.length === 0 ? (
               <p className="mt-3 text-sm text-zinc-500">선택된 상품이 없습니다.</p>
             ) : (
-              <div className="mt-3 space-y-2 text-sm">
+              <div className="mt-3 flex flex-col gap-2 text-sm">
                 <p className="rounded-md bg-zinc-50 px-2 py-1 text-xs text-zinc-600">
                   선택 {selectedProductCount}종 / 총 {selectedQuantityTotal}개
                 </p>
@@ -608,7 +608,7 @@ export function Storefront({ storeBundle }: StorefrontProps) {
 
           <section className="mq-card p-4">
             <h2 className="text-lg font-semibold text-zinc-900">주문자 정보</h2>
-            <form className="mt-3 space-y-3" onSubmit={handleSubmitOrder}>
+            <form className="mt-3 flex flex-col gap-3" onSubmit={handleSubmitOrder}>
               <div className="grid gap-2">
                 <label className="text-xs font-medium text-zinc-600">이름</label>
                 <input

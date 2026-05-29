@@ -681,7 +681,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
         </div>
       </section>
 
-      <section className="space-y-3">
+      <section className="flex flex-col gap-3">
         {filteredOrders.map((order) => {
           const knownLineTotal = order.order_items.reduce((acc, item) => acc + (item.line_total ?? 0), 0)
           const hasUnknownLine = order.order_items.some((item) => item.unit_price == null)
@@ -1049,7 +1049,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
               {order.transfer_reports.length > 0 ? (
                 <div className="mt-4 rounded-xl bg-zinc-50 p-3 text-sm text-zinc-700">
                   <p className="font-semibold text-zinc-900">입금 신고 내역</p>
-                  <div className="mt-2 space-y-1">
+                  <div className="mt-2 flex flex-col gap-1">
                     {order.transfer_reports.map((report) => (
                       <p key={report.id}>
                         {formatDate(report.created_at)} / {report.depositor_name} /{" "}

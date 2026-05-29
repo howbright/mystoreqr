@@ -90,7 +90,7 @@ export function QuoteForm({
       ) : null}
       <div className="mt-2 rounded-lg border border-zinc-200 p-2">
         <p className="text-xs font-medium text-zinc-700">상품별 단가 입력</p>
-        <div className="mt-2 space-y-2">
+        <div className="mt-2 flex flex-col gap-2">
           {items.map((item) => (
             <label
               key={item.id}

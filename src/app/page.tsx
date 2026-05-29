@@ -73,7 +73,7 @@ export default async function HomePage() {
             아직 활성화된 매장이 없습니다. `stores` 테이블에 `is_active=true` 매장을 먼저 추가해 주세요.
           </p>
         ) : (
-          <ul className="mt-3 space-y-3">
+          <ul className="mt-3 flex flex-col gap-3">
             {stores.map((store) => (
               <li
                 key={store.slug}

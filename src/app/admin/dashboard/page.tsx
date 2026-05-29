@@ -269,7 +269,7 @@ export default async function AdminDashboardPage(props: PageProps<"/admin/dashbo
           {events.length === 0 ? (
             <p className="mt-3 text-sm text-zinc-500">이벤트가 없습니다.</p>
           ) : (
-            <div className="mt-3 space-y-2 text-sm">
+            <div className="mt-3 flex flex-col gap-2 text-sm">
               {events.map((event) => (
                 <div key={event.id} className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
                   <p className="font-medium text-zinc-800">

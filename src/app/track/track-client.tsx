@@ -508,7 +508,7 @@ export function TrackClient({
       </section>
 
       {order ? (
-        <section className="mq-card space-y-3 p-5">
+        <section className="mq-card flex flex-col gap-3 p-5">
           <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
             <p className="text-xs font-semibold text-zinc-500">조회 결과</p>
             <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
@@ -767,7 +767,7 @@ export function TrackClient({
           {orderItems.length > 0 ? (
             <div className="rounded-lg border border-zinc-200 p-3">
               <p className="text-sm font-semibold text-zinc-900">확정 상품 가격</p>
-              <div className="mt-2 space-y-1 text-sm text-zinc-700">
+              <div className="mt-2 flex flex-col gap-1 text-sm text-zinc-700">
                 {orderItems.map((item) => (
                   <p key={`${item.product_name}-${item.quantity}-${item.unit_price ?? "na"}`}>
                     {item.product_name} / {item.quantity}개 / 단가 {formatKrw(item.unit_price)} / 합계{" "}
