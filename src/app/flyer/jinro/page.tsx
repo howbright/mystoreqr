@@ -11,7 +11,7 @@ const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=520x520&dat
 const orderSteps = [
   "고객 주문 접수",
   "마트에서 최종 금액 확정",
-  "고객이 금액 확인 후 계좌이체",
+  "고객이 금액 확인 후 사장님 계좌로 계좌이체",
   "입금 확인 후 상품 준비/배송",
   "배송 완료",
 ]
@@ -29,10 +29,6 @@ const ownerPoints = [
     title: "상품목록 관리를 도와드립니다",
     body: "엑셀 파일을 주시면 상품 등록을 도와드리고, 필요한 경우 사진 등록도 함께 도와드립니다.",
   },
-  {
-    title: "처음에는 진로마트 단독으로 작게 테스트합니다",
-    body: "복잡한 설치 없이 QR 코드만 붙여두고 고객 반응을 확인할 수 있습니다.",
-  },
 ]
 
 export default function JinroFlyerPage() {
@@ -46,7 +42,7 @@ export default function JinroFlyerPage() {
           편리하게 주문하세요
         </h1>
         <p className="mt-6 text-2xl font-bold leading-relaxed text-zinc-800">
-          쿠팡은 새벽배송,
+          대형마트는 새벽배송,
           <br />
           진로마트는 동네 즉시배송
         </p>
@@ -105,7 +101,6 @@ export default function JinroFlyerPage() {
         <div className="mt-auto flex items-center justify-between gap-5 rounded-2xl border-2 border-zinc-950 p-4">
           <div>
             <p className="text-lg font-black text-zinc-950">아래 QR로 바로 체험해보실 수 있습니다</p>
-            <p className="mt-1 break-all text-sm font-semibold text-zinc-500">{orderPageUrl}</p>
             <p className="mt-3 text-base font-black text-brand-strong">
               관심 있으시면 전화주세요. 이나현 010-6380-8672
             </p>
