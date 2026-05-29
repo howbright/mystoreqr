@@ -1,10 +1,34 @@
 import Link from "next/link"
+import { headers } from "next/headers"
 
 import { createClient } from "@/lib/supabase/server"
 
 type StoreLink = {
   slug: string
   name: string
+}
+
+function isLocalBaseUrl(value: string) {
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(value)
+}
+
+async function getAppBaseUrl() {
+  const envBaseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim()
+  const headersList = await headers()
+  const forwardedHost = headersList.get("x-forwarded-host")?.split(",")[0]?.trim()
+  const host = forwardedHost || headersList.get("host")?.trim()
+  const forwardedProto = headersList.get("x-forwarded-proto")?.split(",")[0]?.trim()
+  const proto = forwardedProto || (host?.startsWith("localhost") || host?.startsWith("127.0.0.1") ? "http" : "https")
+
+  if (host && (!envBaseUrl || isLocalBaseUrl(envBaseUrl))) {
+    return `${proto}://${host}`.replace(/\/$/, "")
+  }
+
+  if (envBaseUrl) {
+    return envBaseUrl.replace(/\/$/, "")
+  }
+
+  return "http://localhost:3000"
 }
 
 export default async function HomePage() {
@@ -17,6 +41,7 @@ export default async function HomePage() {
     .limit(5)
 
   const stores = (data ?? []) as StoreLink[]
+  const appBaseUrl = await getAppBaseUrl()
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-8 md:px-8">
@@ -48,15 +73,29 @@ export default async function HomePage() {
             아직 활성화된 매장이 없습니다. `stores` 테이블에 `is_active=true` 매장을 먼저 추가해 주세요.
           </p>
         ) : (
-          <ul className="mt-3 space-y-2">
+          <ul className="mt-3 space-y-3">
             {stores.map((store) => (
-              <li key={store.slug}>
-                <Link
-                  href={`/s/${store.slug}`}
-                  className="inline-flex rounded-lg bg-brand-soft px-3 py-2 text-sm text-brand-strong hover:bg-brand-border"
-                >
-                  {store.name} 주문 열기 (`/s/{store.slug}`)
-                </Link>
+              <li
+                key={store.slug}
+                className="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <Link
+                    href={`/s/${store.slug}`}
+                    className="inline-flex rounded-lg bg-brand-soft px-3 py-2 text-sm font-medium text-brand-strong hover:bg-brand-border"
+                  >
+                    {store.name} 주문 열기
+                  </Link>
+                  <p className="mt-2 break-all text-xs text-zinc-500">{`${appBaseUrl}/s/${store.slug}`}</p>
+                </div>
+                <div className="rounded-lg bg-zinc-50 p-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`${appBaseUrl}/s/${store.slug}`)}`}
+                    alt={`${store.name} 주문 페이지 QR 코드`}
+                    className="h-24 w-24 rounded bg-white p-1"
+                  />
+                </div>
               </li>
             ))}
           </ul>
