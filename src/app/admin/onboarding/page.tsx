@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { headers } from "next/headers"
 
 import { logoutAdminAction } from "@/app/admin/_actions/auth"
 import { requireAdminSessionOrRedirect } from "@/lib/mystoreqr/admin-auth"
@@ -14,8 +15,22 @@ function firstString(value: string | string[] | undefined) {
   return value
 }
 
-function getAppBaseUrl() {
+function isLocalBaseUrl(value: string) {
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(value)
+}
+
+async function getAppBaseUrl() {
   const envBaseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim()
+  const headersList = await headers()
+  const forwardedHost = headersList.get("x-forwarded-host")?.split(",")[0]?.trim()
+  const host = forwardedHost || headersList.get("host")?.trim()
+  const forwardedProto = headersList.get("x-forwarded-proto")?.split(",")[0]?.trim()
+  const proto = forwardedProto || (host?.startsWith("localhost") || host?.startsWith("127.0.0.1") ? "http" : "https")
+
+  if (host && (!envBaseUrl || isLocalBaseUrl(envBaseUrl))) {
+    return `${proto}://${host}`.replace(/\/$/, "")
+  }
+
   if (envBaseUrl) {
     return envBaseUrl.replace(/\/$/, "")
   }
@@ -48,7 +63,7 @@ export default async function AdminOnboardingPage(props: PageProps<"/admin/onboa
   }
 
   const selectedStore = stores.find((store) => store.slug === storeSlugParam) ?? stores[0]
-  const orderPageUrl = `${getAppBaseUrl()}/s/${selectedStore.slug}`
+  const orderPageUrl = `${await getAppBaseUrl()}/s/${selectedStore.slug}`
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(orderPageUrl)}`
   const successMessage = firstString(searchParams.ok)
   const errorMessage = firstString(searchParams.error)

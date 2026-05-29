@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { headers } from "next/headers"
 
 import { logoutAdminAction } from "@/app/admin/_actions/auth"
 import { requireAdminSessionOrRedirect } from "@/lib/mystoreqr/admin-auth"
@@ -58,8 +59,22 @@ function formatDate(value: string) {
   return dateFormatter.format(new Date(value))
 }
 
-function getAppBaseUrl() {
+function isLocalBaseUrl(value: string) {
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(value)
+}
+
+async function getAppBaseUrl() {
   const envBaseUrl = process.env.NEXT_PUBLIC_APP_URL?.trim()
+  const headersList = await headers()
+  const forwardedHost = headersList.get("x-forwarded-host")?.split(",")[0]?.trim()
+  const host = forwardedHost || headersList.get("host")?.trim()
+  const forwardedProto = headersList.get("x-forwarded-proto")?.split(",")[0]?.trim()
+  const proto = forwardedProto || (host?.startsWith("localhost") || host?.startsWith("127.0.0.1") ? "http" : "https")
+
+  if (host && (!envBaseUrl || isLocalBaseUrl(envBaseUrl))) {
+    return `${proto}://${host}`.replace(/\/$/, "")
+  }
+
   if (envBaseUrl) {
     return envBaseUrl.replace(/\/$/, "")
   }
@@ -334,7 +349,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
     }
     return `/admin/orders?${params.toString()}`
   })()
-  const appBaseUrl = getAppBaseUrl()
+  const appBaseUrl = await getAppBaseUrl()
   const isCustomerCanceledConflict = errorMessage?.includes("고객이 가격확정 전에 주문을 취소했습니다.") ?? false
   const initialLatestUpdatedAt =
     orders.reduce<string | null>((latest, order) => {
