@@ -14,8 +14,10 @@ type OrderForCancel = {
   id: string
   customer_phone: string
   status: string
+  payment_method: string
   payment_status: string
   price_status: string
+  customer_price_confirmed_at: string | null
 }
 
 function errorResponse(message: string, status = 400) {
@@ -56,7 +58,7 @@ export async function POST(request: Request) {
   const isShortCode = /^\d{4}$/.test(orderCode)
   let query = supabase
     .from("orders")
-    .select("id, customer_phone, status, payment_status, price_status, stores!inner(slug)")
+    .select("id, customer_phone, status, payment_method, payment_status, price_status, customer_price_confirmed_at, stores!inner(slug)")
     .order("created_at", { ascending: false })
     .limit(isShortCode ? 50 : 1)
 
@@ -88,15 +90,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, message: "이미 취소된 주문입니다." })
   }
 
-  if (
+  const canCancelBeforePriceQuote =
     order.status !== "pending" ||
     order.price_status !== "needs_review" ||
     order.payment_status !== "not_ready"
-  ) {
-    return errorResponse("가격확정 전 접수 주문만 직접 취소할 수 있습니다.")
+      ? false
+      : true
+  const canCancelCardBeforeCustomerConfirm =
+    order.status === "pending" &&
+    order.payment_method === "card_on_delivery" &&
+    order.price_status === "quoted" &&
+    order.payment_status === "waiting_card_payment" &&
+    order.customer_price_confirmed_at === null
+
+  if (!canCancelBeforePriceQuote && !canCancelCardBeforeCustomerConfirm) {
+    return errorResponse("이미 상품 준비가 시작되어 직접 취소할 수 없습니다. 매장에 문의해 주세요.")
   }
 
-  const { data, error: updateError } = await supabase
+  let updateQuery = supabase
     .from("orders")
     .update({
       status: "canceled",
@@ -104,9 +115,17 @@ export async function POST(request: Request) {
     })
     .eq("id", order.id)
     .eq("status", "pending")
-    .eq("price_status", "needs_review")
-    .eq("payment_status", "not_ready")
-    .select("id")
+
+  if (canCancelBeforePriceQuote) {
+    updateQuery = updateQuery.eq("price_status", "needs_review").eq("payment_status", "not_ready")
+  } else {
+    updateQuery = updateQuery
+      .eq("price_status", "quoted")
+      .eq("payment_status", "waiting_card_payment")
+      .is("customer_price_confirmed_at", null)
+  }
+
+  const { data, error: updateError } = await updateQuery.select("id")
 
   if (updateError) {
     return errorResponse(`주문 취소 실패: ${updateError.message}`, 500)

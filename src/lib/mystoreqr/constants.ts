@@ -19,4 +19,5 @@ export const PAYMENT_STATUS_OPTIONS: PaymentStatus[] = [
   "transfer_submitted",
   "confirmed",
   "rejected",
+  "waiting_card_payment",
 ]

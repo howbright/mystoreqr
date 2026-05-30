@@ -5,10 +5,24 @@ import { Icon } from "@iconify/react"
 import { useCallback, useEffect, useState, type FormEvent } from "react"
 
 import { formatCustomerOrderCode, formatKrw, normalizeCustomerOrderCode } from "@/lib/mystoreqr/format"
-import { orderStatusLabel, paymentStatusLabel, priceStatusLabel } from "@/lib/mystoreqr/status"
+import { orderStatusLabel, paymentMethodLabel, paymentStatusLabel, priceStatusLabel } from "@/lib/mystoreqr/status"
 import type { Database } from "@/types/database.type"
 
-type TrackingOrder = Database["public"]["Functions"]["get_order_tracking_v2"]["Returns"][number]
+type TrackingOrder = Pick<
+  Database["public"]["Tables"]["orders"]["Row"],
+  | "order_code"
+  | "status"
+  | "payment_method"
+  | "payment_status"
+  | "price_status"
+  | "price_note"
+  | "customer_price_confirmed_at"
+  | "subtotal_amount"
+  | "delivery_fee"
+  | "total_amount"
+  | "created_at"
+  | "updated_at"
+>
 type TrackingItem = Pick<
   Database["public"]["Tables"]["order_items"]["Row"],
   "product_name" | "quantity" | "unit_price" | "line_total"
@@ -62,6 +76,8 @@ function getPaymentStatusBadgeClass(status: TrackingOrder["payment_status"]) {
   switch (status) {
     case "confirmed":
       return "bg-emerald-100 text-emerald-800 ring-emerald-200"
+    case "waiting_card_payment":
+      return "bg-violet-100 text-violet-800 ring-violet-200"
     case "rejected":
       return "bg-rose-100 text-rose-800 ring-rose-200"
     default:
@@ -107,12 +123,29 @@ function getCustomerProgressIndex(order: TrackingOrder) {
     return 1
   }
 
+  if (
+    order.status === "pending" &&
+    order.payment_method === "card_on_delivery" &&
+    order.payment_status === "waiting_card_payment" &&
+    order.customer_price_confirmed_at
+  ) {
+    return 1
+  }
+
   return getOrderProgressIndex(order.status)
 }
 
 function getCustomerDisplayStatusLabel(order: TrackingOrder) {
   if (order.status === "pending" && order.payment_status === "confirmed") {
     return "입금확인"
+  }
+
+  if (
+    order.status === "pending" &&
+    order.payment_method === "card_on_delivery" &&
+    order.payment_status === "waiting_card_payment"
+  ) {
+    return order.customer_price_confirmed_at ? "상품준비 대기" : "가격동의 대기"
   }
 
   if (order.status === "pending" && order.payment_status === "transfer_submitted") {
@@ -125,6 +158,16 @@ function getCustomerDisplayStatusLabel(order: TrackingOrder) {
 function getCustomerDisplayStatusBadgeClass(order: TrackingOrder) {
   if (order.status === "pending" && order.payment_status === "confirmed") {
     return "bg-emerald-100 text-emerald-800 ring-emerald-200"
+  }
+
+  if (
+    order.status === "pending" &&
+    order.payment_method === "card_on_delivery" &&
+    order.payment_status === "waiting_card_payment"
+  ) {
+    return order.customer_price_confirmed_at
+      ? "bg-emerald-100 text-emerald-800 ring-emerald-200"
+      : "bg-violet-100 text-violet-800 ring-violet-200"
   }
 
   if (order.status === "pending" && order.payment_status === "transfer_submitted") {
@@ -151,7 +194,19 @@ function getCustomerGuideMessage(order: TrackingOrder) {
     return "상품 준비가 완료되었습니다. 곧 배달을 시작합니다."
   }
 
+  if (
+    order.payment_method === "card_on_delivery" &&
+    order.payment_status === "waiting_card_payment" &&
+    order.customer_price_confirmed_at
+  ) {
+    return "확정 금액에 동의되었습니다. 상품을 준비하고 있습니다. 배달 시 카드로 결제해 주세요."
+  }
+
   if (order.payment_status === "confirmed" || order.status === "payment_confirmed" || order.status === "preparing") {
+    if (order.payment_method === "card_on_delivery") {
+      return "상품을 준비중입니다. 배달 시 카드로 결제해 주세요."
+    }
+
     return "입금이 확인되어 배달을 준비중입니다."
   }
 
@@ -164,6 +219,10 @@ function getCustomerGuideMessage(order: TrackingOrder) {
   }
 
   if (order.price_status === "quoted") {
+    if (order.payment_method === "card_on_delivery") {
+      return "가격이 확정되었습니다. 확정 금액에 동의하면 상품을 준비합니다."
+    }
+
     return "가격이 확정되었습니다. 입금해 주세요. 입금이 확인되면 배달을 준비합니다."
   }
 
@@ -219,6 +278,9 @@ export function TrackClient({
   const [isCancelingOrder, setIsCancelingOrder] = useState(false)
   const [cancelMessage, setCancelMessage] = useState<string | null>(null)
   const [cancelError, setCancelError] = useState<string | null>(null)
+  const [isConfirmingPrice, setIsConfirmingPrice] = useState(false)
+  const [priceConfirmMessage, setPriceConfirmMessage] = useState<string | null>(null)
+  const [priceConfirmError, setPriceConfirmError] = useState<string | null>(null)
 
   const fetchTracking = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false
@@ -272,6 +334,10 @@ export function TrackClient({
         setBankInfo(payload.bankInfo)
       }
       setLastSyncedAt(Date.now())
+      if (payload.order.customer_price_confirmed_at) {
+        setPriceConfirmMessage(null)
+        setPriceConfirmError(null)
+      }
     } catch {
       if (!silent) {
         setOrder(null)
@@ -370,12 +436,51 @@ export function TrackClient({
     }
   }
 
+  async function confirmCardPrice() {
+    if (!order) {
+      return
+    }
+
+    setIsConfirmingPrice(true)
+    setPriceConfirmMessage(null)
+    setPriceConfirmError(null)
+
+    try {
+      const response = await fetch("/api/public/orders/confirm-price", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          lookupToken,
+          orderCode: order.order_code,
+          customerPhone,
+          storeSlug,
+        }),
+      })
+
+      const payload = (await response.json()) as { error?: string; message?: string }
+
+      if (!response.ok || payload.error) {
+        setPriceConfirmError(payload.error ?? "금액 동의 처리에 실패했습니다.")
+        return
+      }
+
+      setPriceConfirmMessage(payload.message ?? "확정 금액에 동의되었습니다.")
+      void fetchTracking({ silent: true })
+    } catch {
+      setPriceConfirmError("네트워크 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
+    } finally {
+      setIsConfirmingPrice(false)
+    }
+  }
+
   async function cancelOrder() {
     if (!order) {
       return
     }
 
-    const confirmed = window.confirm("아직 가격이 확정되기 전이라 주문을 취소할 수 있습니다. 정말 취소할까요?")
+    const confirmed = window.confirm("아직 상품 준비 전이라 주문을 취소할 수 있습니다. 정말 취소할까요?")
     if (!confirmed) {
       return
     }
@@ -643,6 +748,79 @@ export function TrackClient({
             </div>
           ) : null}
 
+          {order.price_status === "quoted" &&
+          order.payment_method === "card_on_delivery" &&
+          order.payment_status === "waiting_card_payment" ? (
+            <div className="rounded-2xl border-2 border-violet-300 bg-violet-50 p-5 text-zinc-900 shadow-sm">
+              <p className="text-sm font-bold text-violet-800">지금 할 일</p>
+              {order.customer_price_confirmed_at ? (
+                <>
+                  <h2 className="mt-1 text-2xl font-black">주문 진행에 동의되었습니다</h2>
+                  <div className="mt-4 rounded-xl bg-white p-4 ring-1 ring-violet-200">
+                    <p className="text-xs font-semibold text-zinc-500">배달 시 카드결제 금액</p>
+                    <p className="mt-1 text-4xl font-black tracking-normal text-zinc-950">
+                      {formatKrw(order.total_amount)}
+                    </p>
+                  </div>
+                  <p className="mt-3 text-sm font-medium leading-6 text-zinc-700">
+                    상품을 준비하고 있습니다. 배달 시 카드로 결제해 주세요.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h2 className="mt-1 text-2xl font-black">확정 금액을 확인해 주세요</h2>
+                  <div className="mt-4 rounded-xl bg-white p-4 ring-1 ring-violet-200">
+                    <p className="text-xs font-semibold text-zinc-500">배달 시 카드결제 금액</p>
+                    <p className="mt-1 text-4xl font-black tracking-normal text-zinc-950">
+                      {formatKrw(order.total_amount)}
+                    </p>
+                  </div>
+                  <p className="mt-3 text-sm font-medium leading-6 text-zinc-700">
+                    이 금액으로 진행에 동의하면 매장에서 상품을 준비합니다. 결제는 배달받을 때 카드로 하시면 됩니다.
+                  </p>
+                  {priceConfirmError ? (
+                    <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+                      {priceConfirmError}
+                    </p>
+                  ) : null}
+                  {priceConfirmMessage ? (
+                    <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
+                      {priceConfirmMessage}
+                    </p>
+                  ) : null}
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => void confirmCardPrice()}
+                      disabled={isConfirmingPrice}
+                      className="h-11 rounded-lg bg-zinc-950 px-4 text-sm font-black text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
+                    >
+                      {isConfirmingPrice ? "처리 중..." : "이 금액으로 주문 진행하기"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void cancelOrder()}
+                      disabled={isCancelingOrder}
+                      className="h-11 rounded-lg border border-rose-200 px-4 text-sm font-bold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isCancelingOrder ? "취소 중..." : "주문 취소하기"}
+                    </button>
+                  </div>
+                  {cancelError ? (
+                    <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+                      {cancelError}
+                    </p>
+                  ) : null}
+                  {cancelMessage ? (
+                    <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
+                      {cancelMessage}
+                    </p>
+                  ) : null}
+                </>
+              )}
+            </div>
+          ) : null}
+
           {order.price_status === "quoted" && order.payment_status === "transfer_submitted" ? (
             <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
               <p className="font-bold">입금 확인을 기다리고 있습니다.</p>
@@ -728,6 +906,9 @@ export function TrackClient({
           </div>
 
           <div className="flex flex-wrap gap-2 text-xs">
+            <span className="rounded-full bg-zinc-100 px-3 py-1 font-semibold text-zinc-700 ring-1 ring-zinc-200">
+              {paymentMethodLabel(order.payment_method)}
+            </span>
             <span className={`rounded-full px-3 py-1 font-semibold ring-1 ${getPaymentStatusBadgeClass(order.payment_status)}`}>
               결제 {paymentStatusLabel(order.payment_status)}
             </span>

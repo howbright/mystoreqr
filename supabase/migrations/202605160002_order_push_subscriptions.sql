@@ -13,6 +13,9 @@ create table if not exists public.order_push_subscriptions (
 create index if not exists order_push_subscriptions_order_id_idx
   on public.order_push_subscriptions (order_id);
 
+drop trigger if exists trg_order_push_subscriptions_set_updated_at
+on public.order_push_subscriptions;
+
 create trigger trg_order_push_subscriptions_set_updated_at
 before update on public.order_push_subscriptions
 for each row

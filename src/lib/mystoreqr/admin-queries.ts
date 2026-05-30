@@ -38,12 +38,14 @@ export type AdminOrder = Pick<
   | "lookup_token"
   | "customer_name"
   | "customer_phone"
+  | "customer_price_confirmed_at"
   | "fulfillment_type"
   | "delivery_address"
   | "delivery_address_detail"
   | "customer_note"
   | "cancel_reason"
   | "status"
+  | "payment_method"
   | "payment_status"
   | "price_status"
   | "price_note"
@@ -131,12 +133,14 @@ export async function getAdminOrdersByStoreId(storeId: string, limit = 100): Pro
         "lookup_token",
         "customer_name",
         "customer_phone",
+        "customer_price_confirmed_at",
         "fulfillment_type",
         "delivery_address",
         "delivery_address_detail",
         "customer_note",
         "cancel_reason",
         "status",
+        "payment_method",
         "payment_status",
         "price_status",
         "price_note",
@@ -327,6 +331,7 @@ export async function getAdminRoleQueueCountsByStoreId(storeId: string): Promise
           "status.eq.payment_confirmed",
           "status.eq.preparing",
           "and(status.eq.pending,payment_status.eq.confirmed)",
+          "and(status.eq.pending,payment_status.eq.waiting_card_payment,customer_price_confirmed_at.not.is.null)",
         ].join(",")
       ),
     supabase

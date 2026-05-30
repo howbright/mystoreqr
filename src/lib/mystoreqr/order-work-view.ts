@@ -39,7 +39,10 @@ const PRIMARY_STATUS_BY_VIEW: Record<OrderWorkView, OrderStatus[]> = {
   delivery: ["delivering", "completed"],
 }
 
-type RoleFilteredOrder = Pick<AdminOrder, "status" | "price_status" | "payment_status" | "fulfillment_type">
+type RoleFilteredOrder = Pick<
+  AdminOrder,
+  "status" | "price_status" | "payment_status" | "payment_method" | "fulfillment_type" | "customer_price_confirmed_at"
+>
 
 export function parseOrderWorkView(rawValue: string | undefined): OrderWorkView {
   if (!rawValue) {
@@ -76,7 +79,7 @@ export function getAllowedOrderStatusForAction(view: OrderWorkView): OrderStatus
 
 export function getAllowedPaymentStatusForAction(view: OrderWorkView): PaymentStatus[] {
   if (canManagePaymentInView(view)) {
-    return ["waiting_transfer", "confirmed", "rejected", "not_ready", "transfer_submitted"]
+    return ["waiting_transfer", "confirmed", "rejected", "not_ready", "transfer_submitted", "waiting_card_payment"]
   }
   return []
 }
@@ -92,7 +95,11 @@ export function isOrderVisibleInWorkView(order: RoleFilteredOrder, view: OrderWo
       order.status !== "canceled" &&
       (
         order.price_status === "needs_review" ||
-        (order.price_status === "quoted" && order.payment_status === "waiting_transfer")
+        (order.price_status === "quoted" &&
+          (
+            order.payment_status === "waiting_transfer" ||
+            (order.payment_status === "waiting_card_payment" && order.customer_price_confirmed_at === null)
+          ))
       )
     )
   }
@@ -103,9 +110,12 @@ export function isOrderVisibleInWorkView(order: RoleFilteredOrder, view: OrderWo
       order.status !== "canceled" &&
       order.price_status === "quoted" &&
       (
-      order.payment_status === "waiting_transfer" ||
-      order.payment_status === "transfer_submitted" ||
-      order.payment_status === "rejected"
+        order.payment_method === "bank_transfer" &&
+        (
+          order.payment_status === "waiting_transfer" ||
+          order.payment_status === "transfer_submitted" ||
+          order.payment_status === "rejected"
+        )
       )
     )
   }
@@ -115,7 +125,13 @@ export function isOrderVisibleInWorkView(order: RoleFilteredOrder, view: OrderWo
       order.status === "preparing" ||
       order.status === "ready_for_delivery" ||
       order.status === "payment_confirmed" ||
-      (order.status === "pending" && order.payment_status === "confirmed")
+      (order.status === "pending" && order.payment_status === "confirmed") ||
+      (
+        order.status === "pending" &&
+        order.payment_method === "card_on_delivery" &&
+        order.payment_status === "waiting_card_payment" &&
+        order.customer_price_confirmed_at !== null
+      )
     )
   }
 

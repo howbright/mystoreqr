@@ -12,6 +12,8 @@ type OrderItemPayload = {
   quantity: number
 }
 
+type PaymentMethod = "bank_transfer" | "card_on_delivery"
+
 function errorResponse(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status })
 }
@@ -117,6 +119,15 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
   const fulfillmentType = payload.fulfillmentType
   if (fulfillmentType !== "delivery" && fulfillmentType !== "pickup") {
     return errorResponse("수령 방식은 delivery 또는 pickup 이어야 합니다.")
+  }
+
+  const paymentMethod = String(payload.paymentMethod ?? "bank_transfer").trim() as PaymentMethod
+  if (paymentMethod !== "bank_transfer" && paymentMethod !== "card_on_delivery") {
+    return errorResponse("결제 방법이 올바르지 않습니다.")
+  }
+
+  if (fulfillmentType !== "delivery" && paymentMethod === "card_on_delivery") {
+    return errorResponse("배달 시 카드결제는 배달 주문에서만 선택할 수 있습니다.")
   }
 
   const orderItems = (() => {
@@ -249,7 +260,7 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
         ? validatedOrderInput.deliveryAddressDetail
         : null,
     customer_note: validatedOrderInput.customerNote,
-    payment_method: "bank_transfer",
+    payment_method: paymentMethod,
   }
 
   const { data: insertedOrder, error: orderInsertError } = await supabase
@@ -303,6 +314,7 @@ export async function POST(request: Request, context: { params: Promise<{ slug: 
       `${store.name} / 주문번호 ${insertedOrder.order_code}`,
       `고객: ${validatedOrderInput.customerName} / ${formatPhone(validatedOrderInput.customerPhone)}`,
       `수령: ${validatedOrderInput.fulfillmentType === "delivery" ? "배달" : "픽업"}`,
+      `결제: ${paymentMethod === "card_on_delivery" ? "배달 시 카드결제" : "계좌이체"}`,
       validatedOrderInput.deliveryAddress ? `주소: ${validatedOrderInput.deliveryAddress}${validatedOrderInput.deliveryAddressDetail ? ` ${validatedOrderInput.deliveryAddressDetail}` : ""}` : null,
       validatedOrderInput.customerNote ? `요청사항: ${validatedOrderInput.customerNote}` : null,
       "",

@@ -239,6 +239,7 @@ export type Database = {
           customer_name: string
           customer_note: string | null
           customer_phone: string
+          customer_price_confirmed_at: string | null
           delivery_address: string | null
           delivery_address_detail: string | null
           delivery_fee: number
@@ -269,6 +270,7 @@ export type Database = {
           customer_name: string
           customer_note?: string | null
           customer_phone: string
+          customer_price_confirmed_at?: string | null
           delivery_address?: string | null
           delivery_address_detail?: string | null
           delivery_fee?: number
@@ -299,6 +301,7 @@ export type Database = {
           customer_name?: string
           customer_note?: string | null
           customer_phone?: string
+          customer_price_confirmed_at?: string | null
           delivery_address?: string | null
           delivery_address_detail?: string | null
           delivery_fee?: number
@@ -629,13 +632,14 @@ export type Database = {
         | "completed"
         | "canceled"
         | "delivering"
-      payment_method: "bank_transfer"
+      payment_method: "bank_transfer" | "card_on_delivery"
       payment_status:
         | "waiting_transfer"
         | "transfer_submitted"
         | "confirmed"
         | "rejected"
         | "not_ready"
+        | "waiting_card_payment"
       store_admin_role: "owner" | "manager" | "staff"
       transfer_report_status: "submitted" | "verified" | "rejected"
     }
@@ -776,13 +780,14 @@ export const Constants = {
         "canceled",
         "delivering",
       ],
-      payment_method: ["bank_transfer"],
+      payment_method: ["bank_transfer", "card_on_delivery"],
       payment_status: [
         "waiting_transfer",
         "transfer_submitted",
         "confirmed",
         "rejected",
         "not_ready",
+        "waiting_card_payment",
       ],
       store_admin_role: ["owner", "manager", "staff"],
       transfer_report_status: ["submitted", "verified", "rejected"],

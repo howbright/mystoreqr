@@ -16,7 +16,7 @@ import {
   isOrderVisibleInWorkView,
   parseOrderWorkView,
 } from "@/lib/mystoreqr/order-work-view"
-import { orderStatusLabel, paymentStatusLabel, priceStatusLabel } from "@/lib/mystoreqr/status"
+import { orderStatusLabel, paymentMethodLabel, paymentStatusLabel, priceStatusLabel } from "@/lib/mystoreqr/status"
 
 import { OrderChangeBanner } from "./order-change-banner"
 import { OrderTools } from "./order-tools"
@@ -38,6 +38,7 @@ const SUMMARY_FILTER_OPTIONS = [
   "payment_attention",
   "payment_waiting",
   "payment_submitted",
+  "card_customer_confirm_waiting",
   "prep_queue",
   "preparing",
   "ready_for_delivery",
@@ -99,10 +100,22 @@ function matchesSummaryFilter(
       return order.payment_status === "waiting_transfer"
     case "payment_submitted":
       return order.payment_status === "transfer_submitted"
+    case "card_customer_confirm_waiting":
+      return (
+        order.payment_method === "card_on_delivery" &&
+        order.payment_status === "waiting_card_payment" &&
+        order.customer_price_confirmed_at === null
+      )
     case "prep_queue":
       return (
         order.status === "payment_confirmed" ||
-        (order.status === "pending" && order.payment_status === "confirmed")
+        (order.status === "pending" && order.payment_status === "confirmed") ||
+        (
+          order.status === "pending" &&
+          order.payment_method === "card_on_delivery" &&
+          order.payment_status === "waiting_card_payment" &&
+          order.customer_price_confirmed_at !== null
+        )
       )
     case "preparing":
       return order.status === "preparing"
@@ -133,6 +146,18 @@ function getOrderPriorityMeta(
       containerClass: "border-sky-300 bg-sky-50/40",
       label: "긴급: 입금 신고 확인 필요",
       labelClass: "bg-sky-100 text-sky-800",
+    }
+  }
+
+  if (
+    order.payment_method === "card_on_delivery" &&
+    order.payment_status === "waiting_card_payment" &&
+    order.customer_price_confirmed_at === null
+  ) {
+    return {
+      containerClass: "border-violet-300 bg-violet-50/40",
+      label: "대기: 고객 가격동의 필요",
+      labelClass: "bg-violet-100 text-violet-800",
     }
   }
 
@@ -361,6 +386,12 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
   const paymentAttentionCount = roleFilteredOrders.filter(
     (order) => order.payment_status === "transfer_submitted" || order.payment_status === "waiting_transfer"
   ).length
+  const cardCustomerConfirmWaitingCount = roleFilteredOrders.filter(
+    (order) =>
+      order.payment_method === "card_on_delivery" &&
+      order.payment_status === "waiting_card_payment" &&
+      order.customer_price_confirmed_at === null
+  ).length
   const priceNeedsReviewCount = roleFilteredOrders.filter((order) => order.price_status === "needs_review").length
   const priceQuotedCount = roleFilteredOrders.filter((order) => order.price_status === "quoted").length
   const paymentWaitingCount = roleFilteredOrders.filter((order) => order.payment_status === "waiting_transfer").length
@@ -368,7 +399,13 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
   const prepQueueCount = roleFilteredOrders.filter(
     (order) =>
       order.status === "payment_confirmed" ||
-      (order.status === "pending" && order.payment_status === "confirmed")
+      (order.status === "pending" && order.payment_status === "confirmed") ||
+      (
+        order.status === "pending" &&
+        order.payment_method === "card_on_delivery" &&
+        order.payment_status === "waiting_card_payment" &&
+        order.customer_price_confirmed_at !== null
+      )
   ).length
   const preparingCount = roleFilteredOrders.filter((order) => order.status === "preparing").length
   const readyForDeliveryCount = roleFilteredOrders.filter((order) => order.status === "ready_for_delivery").length
@@ -379,6 +416,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
       ? [
           { key: "price_needs_review", label: "가격 확정 대기", value: priceNeedsReviewCount },
           { key: "price_quoted", label: "가격 확정 완료", value: priceQuotedCount },
+          { key: "card_customer_confirm_waiting", label: "고객 동의 대기", value: cardCustomerConfirmWaitingCount },
         ]
       : selectedWorkView === "payment"
         ? [
@@ -688,7 +726,7 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
           const defaultDeliveryFee = order.delivery_fee ?? selectedStore.delivery_fee
           const isPaymentConfirmed = order.payment_status === "confirmed"
           const canManageQuote = canManageQuoteInView(selectedWorkView) && order.price_status === "needs_review"
-          const canManagePayment = canManagePaymentInView(selectedWorkView)
+          const canManagePayment = canManagePaymentInView(selectedWorkView) && order.payment_method === "bank_transfer"
           const canCancelOrder =
             canCancelOrderInView(selectedWorkView) &&
             order.status === "pending" &&
@@ -711,39 +749,62 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
           const priorityMeta = getOrderPriorityMeta(order)
           const trackingPath = `/track?token=${encodeURIComponent(order.lookup_token)}&store=${encodeURIComponent(selectedStore.slug)}`
           const trackingUrl = `${appBaseUrl}${trackingPath}`
-          const customerGuideText = [
-            `${order.customer_name}님, ${selectedStore.name}입니다.`,
-            `주문번호: ${order.order_code}`,
-            `확정 금액: ${formatKrw(order.total_amount)}`,
-            `입금 계좌: ${selectedStore.bank_name} ${selectedStore.bank_account_number} (예금주 ${selectedStore.bank_account_holder})`,
-            "위 계좌로 입금해 주세요.",
-            "입금이 확인되면 상품을 준비하겠습니다.",
-            `주문 조회: ${trackingUrl}`,
-            "감사합니다.",
-          ].join("\n")
-          const quoteSmsText = [
-            `${selectedStore.name}입니다.`,
-            `주문번호: ${order.order_code}`,
-            `확정금액: ${formatKrw(order.total_amount)}`,
-            "",
-            "입금계좌:",
-            `${selectedStore.bank_name} ${selectedStore.bank_account_number}`,
-            `예금주: ${selectedStore.bank_account_holder}`,
-            "",
-            "위 계좌로 입금해 주세요.",
-            "입금이 확인되면 상품을 준비하겠습니다.",
-            "",
-            `주문조회: ${trackingUrl}`,
-          ].join("\n")
+          const isCardOnDelivery = order.payment_method === "card_on_delivery"
+          const customerGuideText = isCardOnDelivery
+            ? [
+                `${order.customer_name}님, ${selectedStore.name}입니다.`,
+                `주문번호: ${order.order_code}`,
+                `확정 금액: ${formatKrw(order.total_amount)}`,
+                "배달 시 카드결제로 결제하시면 됩니다.",
+                "아래 주문조회 링크에서 확정 금액에 동의해 주시면 상품을 준비하겠습니다.",
+                `주문 조회: ${trackingUrl}`,
+                "감사합니다.",
+              ].join("\n")
+            : [
+                `${order.customer_name}님, ${selectedStore.name}입니다.`,
+                `주문번호: ${order.order_code}`,
+                `확정 금액: ${formatKrw(order.total_amount)}`,
+                `입금 계좌: ${selectedStore.bank_name} ${selectedStore.bank_account_number} (예금주 ${selectedStore.bank_account_holder})`,
+                "위 계좌로 입금해 주세요.",
+                "입금이 확인되면 상품을 준비하겠습니다.",
+                `주문 조회: ${trackingUrl}`,
+                "감사합니다.",
+              ].join("\n")
+          const quoteSmsText = isCardOnDelivery
+            ? [
+                `${selectedStore.name}입니다.`,
+                `주문번호: ${order.order_code}`,
+                `확정금액: ${formatKrw(order.total_amount)}`,
+                "",
+                "배달 시 카드결제로 결제하시면 됩니다.",
+                "아래 링크에서 금액을 확인하고 주문 진행에 동의해 주세요.",
+                "동의 후 상품을 준비하겠습니다.",
+                "",
+                `주문조회: ${trackingUrl}`,
+              ].join("\n")
+            : [
+                `${selectedStore.name}입니다.`,
+                `주문번호: ${order.order_code}`,
+                `확정금액: ${formatKrw(order.total_amount)}`,
+                "",
+                "입금계좌:",
+                `${selectedStore.bank_name} ${selectedStore.bank_account_number}`,
+                `예금주: ${selectedStore.bank_account_holder}`,
+                "",
+                "위 계좌로 입금해 주세요.",
+                "입금이 확인되면 상품을 준비하겠습니다.",
+                "",
+                `주문조회: ${trackingUrl}`,
+              ].join("\n")
           const quoteSmsHref = `sms:${normalizePhone(order.customer_phone)}?body=${encodeURIComponent(quoteSmsText)}`
           const canSendQuoteSms =
             order.price_status === "quoted" &&
-            order.payment_status === "waiting_transfer" &&
+            (order.payment_status === "waiting_transfer" || order.payment_status === "waiting_card_payment") &&
             normalizePhone(order.customer_phone).length >= 10
           const paymentConfirmedSmsText = [
             `${selectedStore.name}입니다.`,
             `주문번호: ${order.order_code}`,
-            `입금이 확인되었습니다. 감사합니다.`,
+            isCardOnDelivery ? "카드결제가 확인되었습니다. 감사합니다." : "입금이 확인되었습니다. 감사합니다.",
             "",
             order.fulfillment_type === "delivery"
               ? "상품 준비 후 배달을 진행하겠습니다."
@@ -761,9 +822,10 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
             "",
             "주문하신 상품이 배송 출발했습니다.",
             "잠시 후 집 앞에 도착 예정입니다.",
+            isCardOnDelivery ? "배달 시 카드결제 부탁드립니다." : null,
             "",
             `주문조회: ${trackingUrl}`,
-          ].join("\n")
+          ].filter(Boolean).join("\n")
           const deliveryStartedSmsHref = `sms:${normalizePhone(order.customer_phone)}?body=${encodeURIComponent(deliveryStartedSmsText)}`
           const canSendDeliveryStartedSms =
             order.status === "delivering" &&
@@ -773,7 +835,9 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
             `${selectedStore.name}입니다.`,
             `주문번호: ${order.order_code}`,
             "",
-            "주문하신 상품을 집 앞에 배송 완료했습니다.",
+            isCardOnDelivery
+              ? "카드결제 및 배송이 완료되었습니다."
+              : "주문하신 상품을 집 앞에 배송 완료했습니다.",
             "확인 부탁드립니다.",
             "",
             "이용해 주셔서 감사합니다.",
@@ -788,12 +852,16 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
             `주문번호: ${order.order_code}`,
             `고객: ${order.customer_name} / ${formatPhone(order.customer_phone)}`,
             `수령: ${order.fulfillment_type === "delivery" ? "배달" : "픽업"}`,
+            `결제방법: ${paymentMethodLabel(order.payment_method)}`,
             order.delivery_address
               ? `주소: ${order.delivery_address}${order.delivery_address_detail ? ` ${order.delivery_address_detail}` : ""}`
               : null,
             `주문상태: ${orderStatusLabel(order.status)}`,
             `가격상태: ${priceStatusLabel(order.price_status)}`,
             `결제상태: ${paymentStatusLabel(order.payment_status)}`,
+            order.payment_method === "card_on_delivery" && order.customer_price_confirmed_at
+              ? `고객 가격동의: ${formatDate(order.customer_price_confirmed_at)}`
+              : null,
             "",
             "상품:",
             ...order.order_items.map(
@@ -838,6 +906,9 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                       결제 {paymentStatusLabel(order.payment_status)}
                     </span>
                   ) : null}
+                  <span className="rounded-full bg-zinc-100 px-2 py-1 text-zinc-700">
+                    {paymentMethodLabel(order.payment_method)}
+                  </span>
                 </div>
               </div>
               <div className="mt-2">
@@ -902,6 +973,13 @@ export default async function AdminOrdersPage(props: PageProps<"/admin/orders">)
                 ) : null}
                 {order.customer_note ? <p>요청사항: {order.customer_note}</p> : null}
                 {order.price_note ? <p>가격 메모: {order.price_note}</p> : null}
+                {order.payment_method === "card_on_delivery" && order.payment_status === "waiting_card_payment" ? (
+                  <p className="font-semibold text-violet-800">
+                    {order.customer_price_confirmed_at
+                      ? `고객 가격동의 완료: ${formatDate(order.customer_price_confirmed_at)}`
+                      : "고객 가격동의 대기 중"}
+                  </p>
+                ) : null}
               </div>
 
               <div className="mt-3 overflow-x-auto">

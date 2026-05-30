@@ -137,7 +137,7 @@ export async function setOrderQuoteAction(formData: FormData) {
 
   const { data: existingOrder, error: existingOrderError } = await supabase
     .from("orders")
-    .select("status, payment_status, price_status, cancel_reason")
+    .select("status, payment_method, payment_status, price_status, cancel_reason")
     .eq("id", orderId)
     .maybeSingle()
 
@@ -219,7 +219,9 @@ export async function setOrderQuoteAction(formData: FormData) {
 
   const nextPaymentStatus =
     existingOrder.payment_status === "not_ready"
-      ? "waiting_transfer"
+      ? existingOrder.payment_method === "card_on_delivery"
+        ? "waiting_card_payment"
+        : "waiting_transfer"
       : existingOrder.payment_status
 
   const { data, error } = await supabase
@@ -233,6 +235,7 @@ export async function setOrderQuoteAction(formData: FormData) {
       quoted_at: new Date().toISOString(),
       quoted_by: null,
       payment_status: nextPaymentStatus,
+      customer_price_confirmed_at: null,
     })
     .eq("id", orderId)
     .eq("status", "pending")
@@ -317,33 +320,55 @@ export async function setOrderStatusAction(formData: FormData) {
 
   const supabase = getAdminClientOrRedirect(storeSlug, returnTo)
 
+  const { data: orderForStatus, error: orderForStatusError } = await supabase
+    .from("orders")
+    .select("status, payment_method, payment_status, price_status, customer_price_confirmed_at")
+    .eq("id", orderId)
+    .maybeSingle()
+
+  if (orderForStatusError) {
+    redirectWithError(storeSlug, `주문 조회 실패: ${orderForStatusError.message}`, returnTo)
+  }
+
+  if (!orderForStatus) {
+    redirectWithError(storeSlug, "주문을 찾을 수 없습니다.", returnTo)
+  }
+
   if (actorView === "quote" && nextStatus === "canceled") {
-    const { data: orderForCancel, error: orderForCancelError } = await supabase
-      .from("orders")
-      .select("status, price_status, payment_status")
-      .eq("id", orderId)
-      .maybeSingle()
-
-    if (orderForCancelError) {
-      redirectWithError(storeSlug, `주문 조회 실패: ${orderForCancelError.message}`, returnTo)
-    }
-
-    if (!orderForCancel) {
-      redirectWithError(storeSlug, "주문을 찾을 수 없습니다.", returnTo)
-    }
-
     if (
-      orderForCancel.status !== "pending" ||
-      orderForCancel.price_status !== "needs_review" ||
-      orderForCancel.payment_status !== "not_ready"
+      orderForStatus.status !== "pending" ||
+      orderForStatus.price_status !== "needs_review" ||
+      orderForStatus.payment_status !== "not_ready"
     ) {
       redirectWithError(storeSlug, "가격확정 전 접수 주문만 가격확정담당 뷰에서 취소할 수 있습니다.", returnTo)
     }
   }
 
+  const needsCustomerPriceConfirmation =
+    orderForStatus.payment_method === "card_on_delivery" &&
+    orderForStatus.payment_status === "waiting_card_payment" &&
+    orderForStatus.customer_price_confirmed_at === null
+
+  if (
+    needsCustomerPriceConfirmation &&
+    ["preparing", "ready_for_delivery", "delivering", "completed", "payment_confirmed"].includes(nextStatus)
+  ) {
+    redirectWithError(storeSlug, "아직 고객이 확정금액에 동의하지 않았습니다. 고객 동의 후 처리할 수 있습니다.", returnTo)
+  }
+
   const updatePayload: Database["public"]["Tables"]["orders"]["Update"] = {
     status: nextStatus,
     cancel_reason: nextStatus === "canceled" ? statusNote || "테스트 주문 정리" : null,
+  }
+
+  if (
+    nextStatus === "completed" &&
+    orderForStatus.payment_method === "card_on_delivery" &&
+    orderForStatus.payment_status === "waiting_card_payment"
+  ) {
+    updatePayload.payment_status = "confirmed"
+    updatePayload.confirmed_at = new Date().toISOString()
+    updatePayload.confirmed_by = null
   }
 
   const { error } = await supabase.from("orders").update(updatePayload).eq("id", orderId)
@@ -389,6 +414,24 @@ export async function setPaymentStatusAction(formData: FormData) {
   }
 
   const supabase = getAdminClientOrRedirect(storeSlug, returnTo)
+  const { data: orderForPayment, error: orderForPaymentError } = await supabase
+    .from("orders")
+    .select("payment_method")
+    .eq("id", orderId)
+    .maybeSingle()
+
+  if (orderForPaymentError) {
+    redirectWithError(storeSlug, `주문 조회 실패: ${orderForPaymentError.message}`, returnTo)
+  }
+
+  if (!orderForPayment) {
+    redirectWithError(storeSlug, "주문을 찾을 수 없습니다.", returnTo)
+  }
+
+  if (orderForPayment.payment_method !== "bank_transfer") {
+    redirectWithError(storeSlug, "배달 시 카드결제 주문은 입금확인담당에서 결제상태를 변경하지 않습니다.", returnTo)
+  }
+
   const updatePayload: Database["public"]["Tables"]["orders"]["Update"] = {
     payment_status: paymentStatus,
   }

@@ -14,6 +14,7 @@ type CustomerForm = {
   customerName: string
   customerPhone: string
   fulfillmentType: "delivery" | "pickup"
+  paymentMethod: "bank_transfer" | "card_on_delivery"
   deliveryAddress: string
   deliveryAddressDetail: string
   customerNote: string
@@ -96,6 +97,7 @@ export function Storefront({ storeBundle }: StorefrontProps) {
     customerName: "",
     customerPhone: "",
     fulfillmentType: store.delivery_enabled ? "delivery" : "pickup",
+    paymentMethod: "bank_transfer",
     deliveryAddress: "",
     deliveryAddressDetail: "",
     customerNote: "",
@@ -262,6 +264,7 @@ export function Storefront({ storeBundle }: StorefrontProps) {
           customerName: customerForm.customerName,
           customerPhone: customerForm.customerPhone,
           fulfillmentType: customerForm.fulfillmentType,
+          paymentMethod: customerForm.paymentMethod,
           deliveryAddress: customerForm.deliveryAddress,
           deliveryAddressDetail: customerForm.deliveryAddressDetail,
           customerNote: customerForm.customerNote,
@@ -672,6 +675,7 @@ export function Storefront({ storeBundle }: StorefrontProps) {
                       setCustomerForm((prev) => ({
                         ...prev,
                         fulfillmentType: "pickup",
+                        paymentMethod: "bank_transfer",
                       }))
                     }
                     disabled={!store.pickup_enabled}
@@ -715,6 +719,52 @@ export function Storefront({ storeBundle }: StorefrontProps) {
                   </div>
                 </>
               ) : null}
+
+              <fieldset className="grid gap-2">
+                <legend className="text-xs font-medium text-zinc-600">결제 방법</legend>
+                <div className="grid gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCustomerForm((prev) => ({
+                        ...prev,
+                        paymentMethod: "bank_transfer",
+                      }))
+                    }
+                    className={`rounded-xl border px-3 py-3 text-left ${
+                      customerForm.paymentMethod === "bank_transfer"
+                        ? "border-brand bg-brand-soft ring-2 ring-brand-border"
+                        : "border-zinc-200 bg-white hover:bg-zinc-50"
+                    }`}
+                  >
+                    <span className="text-sm font-bold text-zinc-900">계좌이체</span>
+                    <span className="mt-1 block text-xs leading-5 text-zinc-600">
+                      최종 금액 확정 후 안내받은 계좌로 입금합니다.
+                    </span>
+                  </button>
+                  {customerForm.fulfillmentType === "delivery" ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCustomerForm((prev) => ({
+                          ...prev,
+                          paymentMethod: "card_on_delivery",
+                        }))
+                      }
+                      className={`rounded-xl border px-3 py-3 text-left ${
+                        customerForm.paymentMethod === "card_on_delivery"
+                          ? "border-brand bg-brand-soft ring-2 ring-brand-border"
+                          : "border-zinc-200 bg-white hover:bg-zinc-50"
+                      }`}
+                    >
+                      <span className="text-sm font-bold text-zinc-900">배달 시 카드결제</span>
+                      <span className="mt-1 block text-xs leading-5 text-zinc-600">
+                        확정 금액에 동의한 뒤, 배달받을 때 카드로 결제합니다.
+                      </span>
+                    </button>
+                  ) : null}
+                </div>
+              </fieldset>
 
               <div className="grid gap-2">
                 <label className="text-xs font-medium text-zinc-600">요청사항</label>

@@ -17,6 +17,7 @@ type OrderForTransferReport = {
   store_id: string
   customer_phone: string
   status: string
+  payment_method: string
   payment_status: string
   price_status: string
   total_amount: number
@@ -75,7 +76,7 @@ export async function POST(request: Request) {
   const isShortCode = /^\d{4}$/.test(orderCode)
   let query = supabase
     .from("orders")
-    .select("id, store_id, customer_phone, status, payment_status, price_status, total_amount, stores!inner(slug)")
+    .select("id, store_id, customer_phone, status, payment_method, payment_status, price_status, total_amount, stores!inner(slug)")
     .order("created_at", { ascending: false })
     .limit(isShortCode ? 50 : 1)
 
@@ -109,6 +110,10 @@ export async function POST(request: Request) {
 
   if (order.price_status !== "quoted") {
     return errorResponse("최종 금액이 확정된 뒤 입금 신고를 할 수 있습니다.")
+  }
+
+  if (order.payment_method !== "bank_transfer") {
+    return errorResponse("이 주문은 계좌이체 주문이 아니라 입금 신고가 필요하지 않습니다.")
   }
 
   if (order.payment_status === "confirmed") {

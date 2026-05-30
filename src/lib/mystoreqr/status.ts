@@ -1,6 +1,7 @@
 import type { Database } from "@/types/database.type"
 
 type OrderStatus = Database["public"]["Enums"]["order_status"]
+type PaymentMethod = Database["public"]["Enums"]["payment_method"]
 type PaymentStatus = Database["public"]["Enums"]["payment_status"]
 type PriceStatus = Database["public"]["Enums"]["order_price_status"]
 
@@ -20,11 +21,17 @@ const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
   transfer_submitted: "입금신고됨",
   confirmed: "입금확인",
   rejected: "입금확인 실패",
+  waiting_card_payment: "현장 카드결제 예정",
 }
 
 const PRICE_STATUS_LABEL: Record<PriceStatus, string> = {
   needs_review: "가격확정 필요",
   quoted: "가격확정 완료",
+}
+
+const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
+  bank_transfer: "계좌이체",
+  card_on_delivery: "배달 시 카드결제",
 }
 
 export function orderStatusLabel(status: OrderStatus) {
@@ -33,6 +40,10 @@ export function orderStatusLabel(status: OrderStatus) {
 
 export function paymentStatusLabel(status: PaymentStatus) {
   return PAYMENT_STATUS_LABEL[status] ?? status
+}
+
+export function paymentMethodLabel(method: PaymentMethod) {
+  return PAYMENT_METHOD_LABEL[method] ?? method
 }
 
 export function priceStatusLabel(status: PriceStatus) {

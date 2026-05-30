@@ -4,16 +4,31 @@ import { cache } from "react"
 
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
-import type { Database, Tables } from "@/types/database.type"
+import type { Tables } from "@/types/database.type"
 
 import { normalizeCustomerOrderCode, normalizePhone } from "./format"
 
 type StoreRow = Tables<"stores">
 type CategoryRow = Tables<"categories">
 type ProductRow = Tables<"products">
+type OrderRow = Tables<"orders">
 type OrderItemRow = Tables<"order_items">
 
-type PublicOrderTracking = Database["public"]["Functions"]["get_order_tracking_v2"]["Returns"][number]
+export type PublicOrderTracking = Pick<
+  OrderRow,
+  | "order_code"
+  | "status"
+  | "payment_method"
+  | "payment_status"
+  | "price_status"
+  | "price_note"
+  | "customer_price_confirmed_at"
+  | "subtotal_amount"
+  | "delivery_fee"
+  | "total_amount"
+  | "created_at"
+  | "updated_at"
+>
 type PublicOrderTrackingRow = PublicOrderTracking & {
   customer_phone: string
 }
@@ -64,9 +79,11 @@ function mapOrderTracking(row: PublicOrderTrackingRow): PublicOrderTracking {
   return {
     order_code: row.order_code,
     status: row.status,
+    payment_method: row.payment_method,
     payment_status: row.payment_status,
     price_status: row.price_status,
     price_note: row.price_note ?? "",
+    customer_price_confirmed_at: row.customer_price_confirmed_at,
     subtotal_amount: row.subtotal_amount,
     delivery_fee: row.delivery_fee,
     total_amount: row.total_amount,
@@ -193,7 +210,7 @@ export async function getOrderTrackingByToken(
   const { data, error } = await supabase
     .from("orders")
     .select(
-      "lookup_token, order_code, status, payment_status, price_status, price_note, subtotal_amount, delivery_fee, total_amount, created_at, updated_at, customer_phone"
+      "lookup_token, order_code, status, payment_method, payment_status, price_status, price_note, customer_price_confirmed_at, subtotal_amount, delivery_fee, total_amount, created_at, updated_at, customer_phone"
     )
     .eq("lookup_token", token)
     .maybeSingle()
@@ -232,7 +249,7 @@ export async function getOrderTrackingByOrderCode(
   let query = supabase
     .from("orders")
     .select(
-      "order_code, status, payment_status, price_status, price_note, subtotal_amount, delivery_fee, total_amount, created_at, updated_at, customer_phone, stores!inner(slug)"
+      "order_code, status, payment_method, payment_status, price_status, price_note, customer_price_confirmed_at, subtotal_amount, delivery_fee, total_amount, created_at, updated_at, customer_phone, stores!inner(slug)"
     )
     .order("created_at", { ascending: false })
     .limit(isShortCode ? 50 : 1)
